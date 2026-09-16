@@ -32,14 +32,16 @@ Un único módulo Lua cargado desde `~/.hammerspoon/init.lua` (symlink al repo):
 ## Errores
 
 - App no encontrada en 5 s → se registra en el log de Hammerspoon y se omite (las demás se colocan igualmente).
-- App sin ventana estándar (ej. app de menú) → se omite con log.
-- Sin permiso de Accesibilidad → los `setFrame` no hacen efecto; Hammerspoon lo pide al arrancar.
+- App sin ventana en el Space actual → se activa la app (cambia de Space) y se reintenta.
+- App corriendo sin ventana (Claude en menu bar) → `launchOrFocus`; si sigue sin ventana → `kill -9` + relanzar (Claude ignora forceTerminate de NSRunningApplication).
+- Sin permiso de Accesibilidad → los `setFrame` no hacen efecto y `allWindows()` devuelve 0 silenciosamente; Hammerspoon lo pide al arrancar.
+
+## Verificación (realizada 2026-09-16)
+
+- Preset dev3 aplicado vía `hs -c "trisplit.applyPreset('dev3')"`: OpenChamber (0,-1410 1704x1410), Code (1708,-1410), Claude (3416,-1410) — 3 columnas exactas (1704 = (5120−8)/3) sobre Odyssey G95C.
+- 2 hotkeys registrados; picker hs.chooser abre y cierra sin errores.
 
 ## Fuera de alcance (YAGNI)
 
 - 3 franjas verticales, grids 2x2, presets multi-pantalla, guardar/restaurar layouts, arrastrar ventanas.
 
-## Verificación
-
-- `hs -c "return hs.hud..."` responde → config cargada sin errores.
-- `hs -c "require('hs.ipc')... applyLayout"` y comparar `frame()` de las 3 ventanas antes/después: cada una ≈ ancho/3 en la pantalla principal.

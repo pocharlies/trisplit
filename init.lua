@@ -67,9 +67,16 @@ end
 local function findWindow(app)
   for _ = 1, 40 do
     for _, w in ipairs(app:allWindows()) do
-      if w:isStandardWindow() or w:isMinimized() then return w end
+      if w:isStandard() or w:isMinimized() then return w end
     end
     hs.timer.usleep(100000)
+  end
+  return nil
+end
+
+local function anyWindow(app)
+  for _, w in ipairs(app:allWindows()) do
+    if w:isStandard() or w:isMinimized() then return w end
   end
   return nil
 end
@@ -80,12 +87,40 @@ local function placeApp(names, frame)
     log.e("app no encontrada: " .. table.concat(names, "/"))
     return false
   end
-  local win = findWindow(app)
+  local win = anyWindow(app)
+  if not win then
+    -- la ventana está en otro Space: activar la app para cambiar de Space
+    app:activate(true)
+    win = findWindow(app)
+  end
+  if not win then
+    -- app corriendo sin ventana (ej. Claude minimizada a menu bar): relanzar
+    hs.application.launchOrFocus(names[1])
+    win = findWindow(app)
+  end
+  if not win then
+    -- sigue sin ventana: reiniciar la app para forzarla a abrirla
+    log.i("reiniciando " .. names[1] .. " para abrir ventana")
+    os.execute("kill -9 " .. app:pid() .. " 2>/dev/null")
+    for _ = 1, 50 do
+      hs.timer.usleep(100000)
+      if not hs.application.get(names[1]) then break end
+    end
+    hs.application.launchOrFocus(names[1])
+    app = ensureRunning(names)
+    win = app and findWindow(app)
+  end
   if not win then
     log.e("sin ventana para: " .. names[1])
     return false
   end
   if win:isMinimized() then win:unminimize() end
+  if win:isFullscreen() then
+    win:toggleFullScreen()
+    hs.timer.usleep(700000)
+  end
+  win:moveToScreen(targetScreen())
+  hs.timer.usleep(100000)
   win:setFrame(frame, ANIM)
   return true
 end
