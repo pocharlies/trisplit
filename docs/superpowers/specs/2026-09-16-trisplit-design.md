@@ -31,6 +31,7 @@ Un único módulo Lua cargado desde `~/.hammerspoon/init.lua` (symlink al repo):
 
 ## Errores
 
+- Pantalla bloqueada (frontmost = loginwindow) → `applyLayout` aborta y lo registra: con el lock activo las subroles AX se vacían y los frames no son fiables.
 - App no encontrada en 5 s → se registra en el log de Hammerspoon y se omite (las demás se colocan igualmente).
 - App sin ventana en el Space actual → se activa la app (cambia de Space) y se reintenta.
 - App corriendo sin ventana (Claude en menu bar) → `launchOrFocus`; si sigue sin ventana → `kill -9` + relanzar (Claude ignora forceTerminate de NSRunningApplication).
