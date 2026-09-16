@@ -7,6 +7,19 @@ local log = hs.logger.new("trisplit", "debug")
 
 local GAP = 4
 local ANIM = 0.2
+local PREFERRED_SCREEN = "Odyssey G95C"
+
+local function targetScreen()
+  for _, s in ipairs(hs.screen.allScreens()) do
+    if s:name() == PREFERRED_SCREEN then return s end
+  end
+  local best, bestArea = nil, 0
+  for _, s in ipairs(hs.screen.allScreens()) do
+    local f = s:frame()
+    if f.w * f.h > bestArea then best, bestArea = s, f.w * f.h end
+  end
+  return best or hs.screen.mainScreen()
+end
 
 local presets = {
   dev3 = {
@@ -22,7 +35,7 @@ local hotkeys = {
 }
 
 local function screenFrame()
-  return hs.screen.mainScreen():visibleFrame()
+  return targetScreen():frame()
 end
 
 local function columnFrames(n)

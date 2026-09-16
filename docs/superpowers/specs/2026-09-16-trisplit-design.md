@@ -13,7 +13,7 @@ Dividir la pantalla principal en 3 columnas iguales y colocar 3 apps elegidas, s
 
 - Ambos modos (preset + picker).
 - División horizontal: 3 columnas de igual ancho.
-- Pantalla objetivo: la pantalla principal (la que tiene la barra de menú; aquí el monitor externo 5120x1440).
+- Pantalla objetivo: Odyssey G95C (ultrawide superior, configurable vía `PREFERRED_SCREEN`; fallback a la pantalla de mayor área).
 
 ## Arquitectura
 
@@ -22,7 +22,7 @@ Un único módulo Lua cargado desde `~/.hammerspoon/init.lua` (symlink al repo):
 - `presets`: tabla de presets; cada preset es una lista de entradas, cada entrada una lista de nombres candidatos (nombre de proceso y/o nombre de .app) para tolerar discrepancias (ej. `Code` vs `Visual Studio Code`).
 - `ensureRunning(names)`: devuelve la app si ya corre; si no, `launchOrFocus` y sondea hasta 5 s.
 - `placeApp(name, frame)`: consigue ventana estándar (o desminimiza), `setFrame` con animación.
-- `columnFrames(n)`: divide `visibleFrame` de `hs.screen.mainScreen()` en n columnas iguales con separación de 4 px.
+- `columnFrames(n)`: divide `frame()` (el área visible, sin Dock ni barra de menú) de `hs.screen.mainScreen()` en n columnas iguales con separación de 4 px.
 - `applyLayout(listOfNames)`: orquesta ensureRunning + placeApp por posición.
 - **Picker**: `hs.chooser` re-entrante — prompt "App 1 de 3", "App 2 de 3", "App 3 de 3"; Esc cancela; al completar aplica el layout.
 - **Menu bar**: icono `◫3` con los presets y "Elegir 3 apps…".
