@@ -53,12 +53,14 @@ local function ensureRunning(names)
     local app = hs.application.get(n)
     if app then return app end
   end
-  hs.application.launchOrFocus(names[1])
-  for _ = 1, 50 do
-    hs.timer.usleep(100000)
-    for _, n in ipairs(names) do
-      local app = hs.application.get(n)
-      if app then return app end
+  for _, n in ipairs(names) do
+    hs.application.launchOrFocus(n)
+    for _ = 1, 30 do
+      hs.timer.usleep(100000)
+      for _, cand in ipairs(names) do
+        local app = hs.application.get(cand)
+        if app then return app end
+      end
     end
   end
   return nil
