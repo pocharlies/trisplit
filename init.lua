@@ -157,7 +157,6 @@ local function installedApps()
   return out
 end
 
-local pickerChoices = nil
 local pickerSel = {}
 local picker
 
@@ -184,8 +183,7 @@ picker = hs.chooser.new(function(row)
 end)
 
 local function openPicker()
-  pickerChoices = pickerChoices or installedApps()
-  picker:choices(function() return pickerChoices end)
+  picker:choices(installedApps)
   pickerSel = {}
   pickerShow()
 end
