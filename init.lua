@@ -125,7 +125,16 @@ local function placeApp(names, frame)
   return true
 end
 
+local function screenLocked()
+  local f = hs.application.frontmostApplication()
+  return f and f:bundleID() == "com.apple.loginwindow"
+end
+
 local function applyLayout(entries)
+  if screenLocked() then
+    log.w("pantalla bloqueada: layout cancelado")
+    return false
+  end
   local frames = columnFrames(#entries)
   local ok = true
   for i, entry in ipairs(entries) do
