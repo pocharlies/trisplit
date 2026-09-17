@@ -7,7 +7,8 @@
   * { box-sizing: border-box; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; }
   body { margin: 0; background: #f5f5f7; color: #1d1d1f; height: 100vh; display: flex; flex-direction: column; font-size: 13px; }
 
-  #bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; }
+  #bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; user-select: none; cursor: grab; }
+  #bar:active { cursor: grabbing; }
   #bar select { font-size: 13px; padding: 4px 8px; border: 1px solid #d2d2d7; border-radius: 6px; background: #fff; color: #1d1d1f; }
   button { font-size: 13px; padding: 4px 12px; border: 1px solid #d2d2d7; border-radius: 6px; background: #fff; color: #1d1d1f; cursor: pointer; box-shadow: 0 .5px 1px rgba(0,0,0,.06); }
   button:hover { background: #fafafa; }
@@ -58,7 +59,7 @@
   </div>
   <div id="monitors"></div>
   <div id="tray">
-    <input id="filter" placeholder="Apps instaladas — arrastra a un hueco o doble clic para colocar en el primero libre">
+    <input id="filter" placeholder="Apps con ventana visible — arrastra a un hueco o doble clic para colocar en el primero libre">
     <div id="chips"></div>
   </div>
 <script>
@@ -266,6 +267,21 @@ document.getElementById("apply").onclick = () => post({ action: "apply" });
 document.getElementById("applyClose").onclick = () => post({ action: "applyAndClose" });
 document.getElementById("close").onclick = () => post({ action: "close" });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") post({ action: "close" }); });
+
+let barDrag = null;
+document.getElementById("bar").addEventListener("mousedown", (e) => {
+  if (e.target.closest("button,select,input")) return;
+  barDrag = { x: e.screenX, y: e.screenY };
+  post({ action: "startDrag" });
+  e.preventDefault();
+});
+window.addEventListener("mousemove", (e) => {
+  if (!barDrag) return;
+  post({ action: "dragBy", dx: e.screenX - barDrag.x, dy: e.screenY - barDrag.y });
+});
+window.addEventListener("mouseup", () => {
+  if (barDrag) { barDrag = null; post({ action: "endDrag" }); }
+});
 
 window.trisplitSetState = (s) => { S = s; W = null; render(); };
 document.addEventListener("DOMContentLoaded", () => post({ action: "ready" }));

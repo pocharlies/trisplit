@@ -245,6 +245,8 @@ local function moveFrontToSlot(n)
   local win = hs.window.focusedWindow()
   if not win then return false end
   placeWindow(win, gridFrame(s, slot.idx, slot.cols, slot.rows), s)
+  win:focus()
+  win:raise()
   activeConfig().monitors[slot.screen].slots[slot.idx] = win:application():name()
   saveState()
   return true
@@ -268,6 +270,7 @@ end
 -- ---------- panel (webview) ----------
 
 local panel = nil
+local dragFrame = nil
 
 local function installedApps()
   local out = {}
@@ -278,13 +281,33 @@ local function installedApps()
   return out
 end
 
+local function visibleApps()
+  local out = {}
+  for _, a in ipairs(hs.application.runningApplications()) do
+    if a:kind() == 1 and a:name() then
+      local hidden = false
+      local ok, hid = pcall(function() return a:isHidden() end)
+      if ok then hidden = hid end
+      if not hidden then
+        local has = false
+        for _, w in ipairs(a:allWindows()) do
+          if w:isStandard() and not w:isMinimized() then has = true break end
+        end
+        if has then out[#out + 1] = a:name() end
+      end
+    end
+  end
+  table.sort(out, function(x, y) return x:lower() < y:lower() end)
+  return out
+end
+
 local function panelState()
   local screens = {}
   for _, s in ipairs(sortedScreens()) do
     local f = s:frame()
     screens[#screens + 1] = { name = s:name(), w = f.w, h = f.h }
   end
-  return { screens = screens, configs = state.configs, active = state.active, apps = installedApps() }
+  return { screens = screens, configs = state.configs, active = state.active, apps = visibleApps() }
 end
 
 local function pushPanel()
@@ -319,6 +342,19 @@ local function handlePanel(msg)
     if panel then panel:hide() end
   elseif action == "close" then
     if panel then panel:hide() end
+  elseif action == "startDrag" then
+    if panel then dragFrame = panel:hswindow():frame() end
+  elseif action == "dragBy" then
+    if panel and dragFrame then
+      panel:hswindow():setFrame({
+        x = dragFrame.x + (m.dx or 0),
+        y = dragFrame.y + (m.dy or 0),
+        w = dragFrame.w,
+        h = dragFrame.h,
+      })
+    end
+  elseif action == "endDrag" then
+    dragFrame = nil
   else
     log.e("acción de panel desconocida: " .. tostring(action))
   end
@@ -387,21 +423,23 @@ end
 -- ---------- menu bar (icono nativo SF Symbol) ----------
 
 local mb = hs.menubar.new()
-local icon = hs.image.imageFromASCII(table.concat({
-  "..................",
-  ".####..####..####.",
-  ".####..####..####.",
-  ".####..####..####.",
-  ".####..####..####.",
-  ".####..####..####.",
-  ".####..####..####.",
-  ".####..####..####.",
-  ".####..####..####.",
-  ".####..####..####.",
-  "..................",
-}, "\n"))
+
+local function assetPath(name)
+  local candidates = {
+    (debug.getinfo(1, "S").source:match("@?(.*/)") or "") .. name,
+    os.getenv("HOME") .. "/Documents/ClaudecodeTools/trisplit/" .. name,
+  }
+  for _, p in ipairs(candidates) do
+    local f = io.open(p, "r")
+    if f then f:close(); return p end
+  end
+  return nil
+end
+
+local iconPath = assetPath("icon.png")
+local icon = iconPath and hs.image.imageFromPath(iconPath) or nil
 if icon then
-  icon:setSize({ w = 20, h = 12 })
+  icon:setSize({ w = 22, h = 12 })
   icon:template(true)
   mb:setIcon(icon)
 else
@@ -439,6 +477,7 @@ rawset(_G, "trisplit", {
   moveFrontToSlot = moveFrontToSlot,
   focusSlot = focusSlot,
   liveMove = liveMove,
+  menubar = function() return mb end,
   evalJS = function(js, cb)
     if not panel then return false end
     panel:evaluateJavaScript(js, cb)
