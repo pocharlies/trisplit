@@ -1,37 +1,34 @@
 # trisplit
 
-Divide la pantalla en **3 columnas iguales** y coloca 3 apps — sin arrastrar ventanas.
+Panel visual estilo macOS para colocar apps en **rejillas por monitor** (columnas × filas configurables) y aplicar layouts con un hotkey. Arrastrar un slot **mueve la ventana real al instante**.
 
 ## Uso
 
 | Acción | Atajo |
 |---|---|
-| Preset `dev3` (OpenChamber · VS Code · Claude) | `⌘⌥3` |
-| Elegir 3 apps al vuelo (buscador) | `⌘⌥⇧3` |
-| Menú rápido | icono `◫3` en la barra de menú |
+| Aplicar la configuración activa (todos los monitores) | `⌘⌥0` |
+| Cambiar a la siguiente configuración y aplicarla | `⌘⌥⇧0` |
+| Abrir el panel | `⌘⌥P` (o icono ▥ de la barra de menú) |
+| Mover la ventana frontal al hueco N | `⌘⌥1` … `⌘⌥9` |
+| Enfocar la app del hueco N | `⌘⌥⇧1` … `⌘⌥⇧9` |
 
-- Lanza las apps que no estén abiertas; restaura las minimizadas; saca las de otros Spaces y las fullscreen.
-- Claude cerrado a la barra de menú: se reinicia automáticamente para abrir ventana.
-- Pantalla objetivo: `PREFERRED_SCREEN` en `init.lua` (actualmente "Odyssey G95C"; fallback: pantalla más grande).
+El número N de cada hueco aparece en su etiqueta `⌘⌥N` del panel (los huecos se numeran de izquierda a derecha y de arriba abajo, monitor a monitor).
 
-## Personalizar
+## Panel
 
-Edita `~/Documents/ClaudecodeTools/trisplit/init.lua`:
+- Cada monitor se muestra a escala con steppers **col / fil** para elegir su rejilla (1–6 columnas × 1–4 filas).
+- **Arrastra apps** desde la bandeja inferior (o entre huecos, incluso de monitores distintos): la ventana real se mueve a la celda al soltar.
+- Doble clic en una app de la bandeja → la coloca en el primer hueco libre.
+- Varias configuraciones (Dev, Reunión, …) con selector, ＋ y 🗑; se autoguardan en `~/.hammerspoon/trisplit.json`.
+- Esc o "Cerrar" cierra el panel.
 
-```lua
-local presets = {
-  dev3 = { { "OpenChamber" }, { "Code", "Visual Studio Code" }, { "Claude" } },
-  -- añade más presets aquí
-}
-```
+## Por dentro
 
-y recarga con el menú `◫3 → Recargar config` (o `hs -c "hs.reload()"`).
+- `init.lua` (Hammerspoon/Lua): estado JSON, colocación (lanza apps, saca de otros Spaces, sale de fullscreen, reinicia apps sin ventana), hotkeys, panel `hs.webview`.
+- `panel.html`: UI ligera estilo macOS (claro, system font), drag & drop HTML5.
+- CLI: `hs -c "trisplit.apply()"`, `trisplit.liveMove('Odyssey G95C', 2, 'Code')`, etc.
 
-## Instalación
+## Requisitos
 
-Ya instalada: Hammerspoon + symlink `~/.hammerspoon/init.lua` → este repo + autostart.
-Requisito: permiso de Accesibilidad para Hammerspoon (Ajustes → Privacidad → Accesibilidad).
-
-## CLI
-
-`hs -c "trisplit.applyPreset('dev3')"` — utilizable en scripts.
+- Hammerspoon 1.1.x con permiso de **Accesibilidad** (Ajustes → Privacidad → Accesibilidad).
+- Autostart ya activado (`hs.autoLaunch`).
