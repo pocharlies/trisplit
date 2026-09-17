@@ -5,6 +5,10 @@
 
 require("hs.ipc")
 
+-- solo el icono de trisplit: fuera el elefante de Hammerspoon (menu bar y Dock)
+hs.menuIcon(false)
+hs.dockIcon(false)
+
 local log = hs.logger.new("trisplit", "debug")
 
 local GAP, ANIM = 4, 0.2
