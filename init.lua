@@ -1,5 +1,6 @@
--- trisplit v3: panel nativo macOS, grid configurable (cols×filas) por monitor,
--- drag & drop que mueve ventanas reales, hotkeys por slot.
+-- trisplit: panel nativo macOS (ventana titled de AppKit vía hs.webview),
+-- grid configurable (cols×filas) por monitor, drag & drop que mueve ventanas
+-- reales y hotkeys por slot.
 -- Repo: ~/Documents/ClaudecodeTools/trisplit (enlazado en ~/.hammerspoon/init.lua)
 
 require("hs.ipc")
@@ -267,18 +268,20 @@ local function liveMove(screenName, idx, app)
   return placeApp(app, gridFrame(s, idx, m.cols, m.rows), s)
 end
 
--- ---------- panel (webview) ----------
+-- ---------- panel (webview en ventana nativa de AppKit) ----------
 
 local panel = nil
-local dragFrame = nil
 
-local function installedApps()
-  local out = {}
-  for entry in hs.fs.dir("/Applications") do
-    if entry:match("%.app$") then out[#out + 1] = entry:gsub("%.app$", "") end
+local function assetPath(name)
+  local candidates = {
+    (debug.getinfo(1, "S").source:match("@?(.*/)") or "") .. name,
+    os.getenv("HOME") .. "/Documents/ClaudecodeTools/trisplit/" .. name,
+  }
+  for _, p in ipairs(candidates) do
+    local f = io.open(p, "r")
+    if f then f:close(); return p end
   end
-  table.sort(out, function(a, b) return a:lower() < b:lower() end)
-  return out
+  return nil
 end
 
 local function visibleApps()
@@ -342,34 +345,9 @@ local function handlePanel(msg)
     if panel then panel:hide() end
   elseif action == "close" then
     if panel then panel:hide() end
-  elseif action == "startDrag" then
-    if panel then dragFrame = panel:hswindow():frame() end
-  elseif action == "dragBy" then
-    if panel and dragFrame then
-      panel:hswindow():setFrame({
-        x = dragFrame.x + (m.dx or 0),
-        y = dragFrame.y + (m.dy or 0),
-        w = dragFrame.w,
-        h = dragFrame.h,
-      })
-    end
-  elseif action == "endDrag" then
-    dragFrame = nil
   else
     log.e("acción de panel desconocida: " .. tostring(action))
   end
-end
-
-local function panelPath()
-  local candidates = {
-    (debug.getinfo(1, "S").source:match("@?(.*/)") or "") .. "panel.html",
-    os.getenv("HOME") .. "/Documents/ClaudecodeTools/trisplit/panel.html",
-  }
-  for _, p in ipairs(candidates) do
-    local f = io.open(p, "r")
-    if f then f:close(); return p end
-  end
-  return candidates[1]
 end
 
 local function openPanel()
@@ -379,20 +357,24 @@ local function openPanel()
     pushPanel()
     return
   end
-  for _, w in ipairs(hs.window.allWindows()) do
-    if w:title() == "Trisplit" then w:close() end
-  end
-  local f = io.open(panelPath(), "r")
-  if not f then log.e("no existe " .. panelPath()); return end
+  local path = assetPath("panel.html")
+  if not path then log.e("no existe panel.html"); return end
+  local f = io.open(path, "r")
   local html = f:read("a")
   f:close()
   local uc = hs.webview.usercontent.new("trisplit")
   uc:setCallback(function(msg) handlePanel(msg) end)
-  panel = hs.webview.new({ x = 300, y = 200, w = 1100, h = 680 }, {}, uc)
+  panel = hs.webview.new({ x = 0, y = 0, w = 1100, h = 680 }, {}, uc)
+  panel:windowStyle({ "titled", "closable", "miniaturizable", "resizable" })
   panel:windowTitle("Trisplit")
+  panel:titleVisibility("visible")
+  panel:setLevel(0)
+  panel:closeOnEscape(true)
   panel:html(html, "trisplit.local")
   panel:show()
   panel:bringToFront()
+  local w = panel:hswindow()
+  if w then w:center() end
   hs.timer.doAfter(1.0, pushPanel)
 end
 
@@ -420,21 +402,9 @@ for i = 1, 9 do
   end)(i))
 end
 
--- ---------- menu bar (icono nativo SF Symbol) ----------
+-- ---------- menu bar (icono template monocromo) ----------
 
 local mb = hs.menubar.new()
-
-local function assetPath(name)
-  local candidates = {
-    (debug.getinfo(1, "S").source:match("@?(.*/)") or "") .. name,
-    os.getenv("HOME") .. "/Documents/ClaudecodeTools/trisplit/" .. name,
-  }
-  for _, p in ipairs(candidates) do
-    local f = io.open(p, "r")
-    if f then f:close(); return p end
-  end
-  return nil
-end
 
 local iconPath = assetPath("icon.png")
 local icon = iconPath and hs.image.imageFromPath(iconPath) or nil
