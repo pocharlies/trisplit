@@ -357,6 +357,9 @@ local function openPanel()
     pushPanel()
     return
   end
+  for _, w in ipairs(hs.window.allWindows()) do
+    if w:title() == "Trisplit" then w:close() end
+  end
   local path = assetPath("panel.html")
   if not path then log.e("no existe panel.html"); return end
   local f = io.open(path, "r")
