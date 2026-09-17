@@ -416,24 +416,7 @@ else
   mb:setTitle("▥")
 end
 
-local function buildMenu()
-  local items = {}
-  for i, cfg in ipairs(state.configs) do
-    items[#items + 1] = {
-      title = (i == state.active and "✓ " or "  ") .. cfg.name,
-      fn = function()
-        state.active = i
-        saveState()
-        applyConfig()
-      end,
-    }
-  end
-  items[#items + 1] = { separator = true }
-  items[#items + 1] = { title = "Panel…  ⌘⌥P", fn = openPanel }
-  items[#items + 1] = { title = "Recargar config", fn = hs.reload }
-  return items
-end
-mb:setMenu(buildMenu)
+mb:setClickCallback(openPanel)
 
 -- ---------- API ----------
 
