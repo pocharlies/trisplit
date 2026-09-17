@@ -1,50 +1,133 @@
--- trisplit: divide la pantalla principal en 3 columnas iguales y coloca apps.
--- Repo: ~/Documents/ClaudecodeTools/trisplit (este fichero es el que se enlaza en ~/.hammerspoon/init.lua)
+-- trisplit v3: panel nativo macOS, grid configurable (cols×filas) por monitor,
+-- drag & drop que mueve ventanas reales, hotkeys por slot.
+-- Repo: ~/Documents/ClaudecodeTools/trisplit (enlazado en ~/.hammerspoon/init.lua)
 
 require("hs.ipc")
 
 local log = hs.logger.new("trisplit", "debug")
 
-local GAP = 4
-local ANIM = 0.2
-local PREFERRED_SCREEN = "Odyssey G95C"
+local GAP, ANIM = 4, 0.2
+local STORE = hs.configdir .. "/trisplit.json"
 
-local function targetScreen()
-  for _, s in ipairs(hs.screen.allScreens()) do
-    if s:name() == PREFERRED_SCREEN then return s end
-  end
-  local best, bestArea = nil, 0
-  for _, s in ipairs(hs.screen.allScreens()) do
-    local f = s:frame()
-    if f.w * f.h > bestArea then best, bestArea = s, f.w * f.h end
-  end
-  return best or hs.screen.mainScreen()
+local ALIASES = { ["Code"] = "Visual Studio Code", ["Visual Studio Code"] = "Code" }
+
+-- ---------- pantallas ----------
+
+local function sortedScreens()
+  local ss = hs.screen.allScreens()
+  table.sort(ss, function(a, b)
+    local fa, fb = a:frame(), b:frame()
+    if fa.x ~= fb.x then return fa.x < fb.x end
+    return fa.y < fb.y
+  end)
+  return ss
 end
 
-local presets = {
-  dev3 = {
-    { "OpenChamber" },
-    { "Code", "Visual Studio Code" },
-    { "Claude" },
-  },
-}
-
-local hotkeys = {
-  dev3   = { mods = { "cmd", "alt" },         key = "3" },
-  picker = { mods = { "cmd", "alt", "shift" }, key = "3" },
-}
-
-local function screenFrame()
-  return targetScreen():frame()
+local function screenByName(name)
+  for _, s in ipairs(hs.screen.allScreens()) do
+    if s:name() == name then return s end
+  end
+  return nil
 end
 
-local function columnFrames(n)
-  local f = screenFrame()
-  local w = (f.w - GAP * (n - 1)) / n
+local function gridFrame(screen, i, cols, rows)
+  cols, rows = math.max(cols or 1, 1), math.max(rows or 1, 1)
+  local f = screen:frame()
+  local w = (f.w - GAP * (cols - 1)) / cols
+  local h = (f.h - GAP * (rows - 1)) / rows
+  local col = (i - 1) % cols
+  local row = math.floor((i - 1) / cols)
+  return hs.geometry(f.x + col * (w + GAP), f.y + row * (h + GAP), w, h)
+end
+
+-- ---------- estado / configs ----------
+-- state = { active = N, configs = [ { name, monitors = { [screenName] = {cols, rows, slots=[app,...]} } } ] }
+
+local function newMonitorGrid(cols, rows)
+  local slots = {}
+  for _ = 1, cols * rows do slots[#slots + 1] = "" end
+  return { cols = cols, rows = rows, slots = slots }
+end
+
+local function defaultConfig()
+  local monitors = {}
+  local defaults = { ["Odyssey G95C"] = { "OpenChamber", "Code", "Claude" } }
+  for _, s in ipairs(sortedScreens()) do
+    local g = newMonitorGrid(3, 1)
+    local apps = defaults[s:name()] or {}
+    for i, a in ipairs(apps) do g.slots[i] = a end
+    monitors[s:name()] = g
+  end
+  return { name = "Dev", monitors = monitors }
+end
+
+local state = { active = 1, configs = {} }
+
+local function saveState()
+  local f = io.open(STORE, "w")
+  if f then f:write(hs.json.encode(state)); f:close() end
+end
+
+local function migrate(cfg)
+  if cfg.slots and not cfg.monitors then
+    local monitors = {}
+    for _, sl in ipairs(cfg.slots) do
+      local g = monitors[sl.screen]
+      if not g then g = { cols = 3, rows = 1, slots = {} }; monitors[sl.screen] = g end
+      g.slots[#g.slots + 1] = sl.app or ""
+    end
+    cfg.slots = nil
+    cfg.monitors = monitors
+  end
+  return cfg
+end
+
+local function loadState()
+  local f = io.open(STORE, "r")
+  if not f then return false end
+  local ok, decoded = pcall(hs.json.decode, f:read("a"))
+  f:close()
+  if ok and decoded and decoded.configs and #decoded.configs > 0 then
+    for _, c in ipairs(decoded.configs) do migrate(c) end
+    state = decoded
+    if not state.active or state.active < 1 or state.active > #state.configs then state.active = 1 end
+    return true
+  end
+  return false
+end
+
+if not loadState() then
+  state = { active = 1, configs = { defaultConfig() } }
+  saveState()
+end
+
+local function activeConfig() return state.configs[state.active] end
+
+local function flatSlots(cfg)
+  cfg = cfg or activeConfig()
   local out = {}
-  for i = 0, n - 1 do
-    out[i + 1] = hs.geometry(f.x + i * (w + GAP), f.y, w, f.h)
+  if not cfg then return out end
+  for _, s in ipairs(sortedScreens()) do
+    local m = cfg.monitors[s:name()]
+    if m then
+      for i, app in ipairs(m.slots) do
+        out[#out + 1] = { screen = s:name(), idx = i, cols = m.cols, rows = m.rows, app = app }
+      end
+    end
   end
+  return out
+end
+
+-- ---------- colocación ----------
+
+local function screenLocked()
+  local f = hs.application.frontmostApplication()
+  return f and f:bundleID() == "com.apple.loginwindow"
+end
+
+local function namesFor(app)
+  local out = { app }
+  if ALIASES[app] then out[2] = ALIASES[app] end
   return out
 end
 
@@ -83,147 +166,285 @@ local function anyWindow(app)
   return nil
 end
 
-local function placeApp(names, frame)
-  local app = ensureRunning(names)
-  if not app then
-    log.e("app no encontrada: " .. table.concat(names, "/"))
-    return false
-  end
-  local win = anyWindow(app)
-  if not win then
-    -- la ventana está en otro Space: activar la app para cambiar de Space
-    app:activate(true)
-    win = findWindow(app)
-  end
-  if not win then
-    -- app corriendo sin ventana (ej. Claude minimizada a menu bar): relanzar
-    hs.application.launchOrFocus(names[1])
-    win = findWindow(app)
-  end
-  if not win then
-    -- sigue sin ventana: reiniciar la app para forzarla a abrirla
-    log.i("reiniciando " .. names[1] .. " para abrir ventana")
-    os.execute("kill -9 " .. app:pid() .. " 2>/dev/null")
-    for _ = 1, 50 do
-      hs.timer.usleep(100000)
-      if not hs.application.get(names[1]) then break end
-    end
-    hs.application.launchOrFocus(names[1])
-    app = ensureRunning(names)
-    win = app and findWindow(app)
-  end
-  if not win then
-    log.e("sin ventana para: " .. names[1])
-    return false
-  end
+local function placeWindow(win, frame, screen)
   if win:isMinimized() then win:unminimize() end
   if win:isFullscreen() then
     win:toggleFullScreen()
     hs.timer.usleep(700000)
   end
-  win:moveToScreen(targetScreen())
-  hs.timer.usleep(100000)
+  if screen and win:screen() and win:screen():name() ~= screen:name() then
+    win:moveToScreen(screen)
+    hs.timer.usleep(100000)
+  end
   win:setFrame(frame, ANIM)
+end
+
+local function placeApp(app, frame, screen)
+  local names = namesFor(app)
+  local a = ensureRunning(names)
+  if not a then
+    log.e("app no encontrada: " .. app)
+    return false
+  end
+  local win = anyWindow(a)
+  if not win then
+    a:activate(true)
+    win = findWindow(a)
+  end
+  if not win then
+    hs.application.launchOrFocus(names[1])
+    win = findWindow(a)
+  end
+  if not win then
+    log.i("reiniciando " .. app .. " para abrir ventana")
+    os.execute("kill -9 " .. a:pid() .. " 2>/dev/null")
+    for _ = 1, 50 do
+      hs.timer.usleep(100000)
+      if not hs.application.get(names[1]) then break end
+    end
+    hs.application.launchOrFocus(names[1])
+    a = ensureRunning(names)
+    win = a and findWindow(a)
+  end
+  if not win then
+    log.e("sin ventana para: " .. app)
+    return false
+  end
+  placeWindow(win, frame, screen)
   return true
 end
 
-local function screenLocked()
-  local f = hs.application.frontmostApplication()
-  return f and f:bundleID() == "com.apple.loginwindow"
-end
-
-local function applyLayout(entries)
+local function applyConfig(cfg)
+  cfg = cfg or activeConfig()
+  if not cfg then return false end
   if screenLocked() then
     log.w("pantalla bloqueada: layout cancelado")
     return false
   end
-  local frames = columnFrames(#entries)
   local ok = true
-  for i, entry in ipairs(entries) do
-    local names = type(entry) == "table" and entry or { entry }
-    if not placeApp(names, frames[i]) then ok = false end
+  for _, s in ipairs(sortedScreens()) do
+    local m = cfg.monitors[s:name()]
+    if m then
+      for i, app in ipairs(m.slots) do
+        if app ~= "" then
+          if not placeApp(app, gridFrame(s, i, m.cols, m.rows), s) then ok = false end
+        end
+      end
+    end
   end
   return ok
 end
 
--- Picker: elegir 3 apps instaladas una a una
+-- ---------- hotkeys por slot ----------
+
+local function moveFrontToSlot(n)
+  local slot = flatSlots()[n]
+  if not slot then return false end
+  local s = screenByName(slot.screen)
+  if not s then log.w("sin pantalla " .. slot.screen); return false end
+  local win = hs.window.focusedWindow()
+  if not win then return false end
+  placeWindow(win, gridFrame(s, slot.idx, slot.cols, slot.rows), s)
+  activeConfig().monitors[slot.screen].slots[slot.idx] = win:application():name()
+  saveState()
+  return true
+end
+
+local function focusSlot(n)
+  local slot = flatSlots()[n]
+  if not slot or slot.app == "" then return false end
+  hs.application.launchOrFocus(namesFor(slot.app)[1])
+  return true
+end
+
+local function liveMove(screenName, idx, app)
+  local s = screenByName(screenName)
+  if not s or app == "" then return false end
+  local m = activeConfig().monitors[screenName]
+  if not m then return false end
+  return placeApp(app, gridFrame(s, idx, m.cols, m.rows), s)
+end
+
+-- ---------- panel (webview) ----------
+
+local panel = nil
+
 local function installedApps()
   local out = {}
   for entry in hs.fs.dir("/Applications") do
-    if entry:match("%.app$") then
-      local name = entry:gsub("%.app$", "")
-      table.insert(out, { text = name, id = name })
-    end
+    if entry:match("%.app$") then out[#out + 1] = entry:gsub("%.app$", "") end
   end
-  table.sort(out, function(a, b) return a.text:lower() < b.text:lower() end)
+  table.sort(out, function(a, b) return a:lower() < b:lower() end)
   return out
 end
 
-local pickerSel = {}
-local picker
-
-local function pickerShow()
-  local n = #pickerSel
-  if n >= 3 then
-    picker:hide()
-    applyLayout(pickerSel)
-    pickerSel = {}
-    return
+local function panelState()
+  local screens = {}
+  for _, s in ipairs(sortedScreens()) do
+    local f = s:frame()
+    screens[#screens + 1] = { name = s:name(), w = f.w, h = f.h }
   end
-  picker:placeholderText(("App %d de 3 — escribe para buscar (esc cancela)"):format(n + 1))
-  picker:show()
-  picker:search("")
+  return { screens = screens, configs = state.configs, active = state.active, apps = installedApps() }
 end
 
-picker = hs.chooser.new(function(row)
-  if not row then
-    pickerSel = {}
+local function pushPanel()
+  if panel then
+    panel:evaluateJavaScript("trisplitSetState(" .. hs.json.encode(panelState()) .. ")")
+  end
+end
+
+local function handlePanel(msg)
+  local raw = msg
+  if type(raw) == "table" then raw = raw.body end
+  local m = raw
+  if type(m) == "string" then
+    local ok, decoded = pcall(hs.json.decode, m)
+    m = ok and decoded or nil
+  end
+  if type(m) ~= "table" then return end
+  local action = m.action
+  if action == "ready" then
+    hs.timer.doAfter(0.3, pushPanel)
+  elseif action == "save" then
+    state.configs = m.configs
+    state.active = m.active
+    saveState()
+    pushPanel()
+  elseif action == "liveMove" then
+    liveMove(m.screen, m.idx, m.app or "")
+  elseif action == "apply" then
+    applyConfig()
+  elseif action == "applyAndClose" then
+    applyConfig()
+    if panel then panel:hide() end
+  elseif action == "close" then
+    if panel then panel:hide() end
+  else
+    log.e("acción de panel desconocida: " .. tostring(action))
+  end
+end
+
+local function panelPath()
+  local candidates = {
+    (debug.getinfo(1, "S").source:match("@?(.*/)") or "") .. "panel.html",
+    os.getenv("HOME") .. "/Documents/ClaudecodeTools/trisplit/panel.html",
+  }
+  for _, p in ipairs(candidates) do
+    local f = io.open(p, "r")
+    if f then f:close(); return p end
+  end
+  return candidates[1]
+end
+
+local function openPanel()
+  if panel then
+    panel:show()
+    panel:bringToFront()
+    pushPanel()
     return
   end
-  table.insert(pickerSel, row.id)
-  pickerShow()
+  for _, w in ipairs(hs.window.allWindows()) do
+    if w:title() == "Trisplit" then w:close() end
+  end
+  local f = io.open(panelPath(), "r")
+  if not f then log.e("no existe " .. panelPath()); return end
+  local html = f:read("a")
+  f:close()
+  local uc = hs.webview.usercontent.new("trisplit")
+  uc:setCallback(function(msg) handlePanel(msg) end)
+  panel = hs.webview.new({ x = 300, y = 200, w = 1100, h = 680 }, {}, uc)
+  panel:windowTitle("Trisplit")
+  panel:html(html, "trisplit.local")
+  panel:show()
+  panel:bringToFront()
+  hs.timer.doAfter(1.0, pushPanel)
+end
+
+-- ---------- hotkeys ----------
+-- ⌘⌥0 aplicar · ⌘⌥⇧0 siguiente config · ⌘⌥P panel
+-- ⌘⌥1..9 mover ventana frontal al slot N · ⌘⌥⇧1..9 enfocar app del slot N
+
+hs.hotkey.bind({ "cmd", "alt" }, "0", function() applyConfig() end)
+hs.hotkey.bind({ "cmd", "alt", "shift" }, "0", function()
+  if #state.configs > 0 then
+    state.active = state.active % #state.configs + 1
+    saveState()
+    applyConfig()
+    pushPanel()
+  end
 end)
+hs.hotkey.bind({ "cmd", "alt" }, "p", openPanel)
 
-local function openPicker()
-  picker:choices(installedApps)
-  pickerSel = {}
-  pickerShow()
+for i = 1, 9 do
+  hs.hotkey.bind({ "cmd", "alt" }, tostring(i), (function(n)
+    return function() moveFrontToSlot(n) end
+  end)(i))
+  hs.hotkey.bind({ "cmd", "alt", "shift" }, tostring(i), (function(n)
+    return function() focusSlot(n) end
+  end)(i))
 end
 
--- Menu bar
+-- ---------- menu bar (icono nativo SF Symbol) ----------
+
 local mb = hs.menubar.new()
-mb:setTitle("◫3")
+local icon = hs.image.imageFromASCII(table.concat({
+  "..................",
+  ".####..####..####.",
+  ".####..####..####.",
+  ".####..####..####.",
+  ".####..####..####.",
+  ".####..####..####.",
+  ".####..####..####.",
+  ".####..####..####.",
+  ".####..####..####.",
+  ".####..####..####.",
+  "..................",
+}, "\n"))
+if icon then
+  icon:setSize({ w = 20, h = 12 })
+  icon:template(true)
+  mb:setIcon(icon)
+else
+  mb:setTitle("▥")
+end
 
 local function buildMenu()
   local items = {}
-  for name, entries in pairs(presets) do
-    local labels = {}
-    for _, e in ipairs(entries) do table.insert(labels, type(e) == "table" and e[1] or e) end
-    table.insert(items, {
-      title = name .. "  (" .. table.concat(labels, " · ") .. ")",
-      fn = function() applyLayout(entries) end,
-    })
+  for i, cfg in ipairs(state.configs) do
+    items[#items + 1] = {
+      title = (i == state.active and "✓ " or "  ") .. cfg.name,
+      fn = function()
+        state.active = i
+        saveState()
+        applyConfig()
+      end,
+    }
   end
-  table.insert(items, { separator = true })
-  table.insert(items, { title = "Elegir 3 apps…", fn = openPicker })
-  table.insert(items, { separator = true })
-  table.insert(items, { title = "Recargar config", fn = hs.reload })
+  items[#items + 1] = { separator = true }
+  items[#items + 1] = { title = "Panel…  ⌘⌥P", fn = openPanel }
+  items[#items + 1] = { title = "Recargar config", fn = hs.reload }
   return items
 end
 mb:setMenu(buildMenu)
 
--- Hotkeys
-hs.hotkey.bind(hotkeys.dev3.mods, hotkeys.dev3.key, function()
-  applyLayout(presets.dev3)
-end)
-hs.hotkey.bind(hotkeys.picker.mods, hotkeys.picker.key, openPicker)
+-- ---------- API ----------
 
--- API para verificación/uso desde CLI: hs -c "trisplit.applyPreset('dev3')"
-local api = {
-  applyPreset = function(name) return applyLayout(presets[name]) end,
-  applyLayout = applyLayout,
-  openPicker = openPicker,
-}
-rawset(_G, "trisplit", api)
+rawset(_G, "trisplit", {
+  apply = applyConfig,
+  applyConfig = applyConfig,
+  openPanel = openPanel,
+  state = function() return state end,
+  panelState = panelState,
+  flatSlots = flatSlots,
+  moveFrontToSlot = moveFrontToSlot,
+  focusSlot = focusSlot,
+  liveMove = liveMove,
+  evalJS = function(js, cb)
+    if not panel then return false end
+    panel:evaluateJavaScript(js, cb)
+    return true
+  end,
+  panelObj = function() return panel end,
+})
 
-log.i("trisplit cargado")
+log.i("trisplit v3 cargado")

@@ -1,0 +1,274 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; }
+  body { margin: 0; background: #f5f5f7; color: #1d1d1f; height: 100vh; display: flex; flex-direction: column; font-size: 13px; }
+
+  #bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; }
+  #bar select { font-size: 13px; padding: 4px 8px; border: 1px solid #d2d2d7; border-radius: 6px; background: #fff; color: #1d1d1f; }
+  button { font-size: 13px; padding: 4px 12px; border: 1px solid #d2d2d7; border-radius: 6px; background: #fff; color: #1d1d1f; cursor: pointer; box-shadow: 0 .5px 1px rgba(0,0,0,.06); }
+  button:hover { background: #fafafa; }
+  button.primary { background: #0071e3; border-color: #0071e3; color: #fff; }
+  button.primary:hover { background: #0077ed; }
+  button.icon { padding: 4px 8px; }
+  .hint { font-size: 11px; color: #86868b; margin-left: auto; }
+
+  #monitors { flex: 1; display: flex; gap: 12px; padding: 4px 14px 12px; min-height: 0; align-items: stretch; }
+  .mon { background: #fff; border: 1px solid #d2d2d7; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 10px; display: flex; flex-direction: column; min-width: 200px; }
+  .monhead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .monhead .nm { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .monhead .res { font-size: 11px; color: #86868b; }
+  .steppers { margin-left: auto; display: flex; gap: 8px; }
+  .stepper { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #86868b; }
+  .stepper button { padding: 1px 7px; font-size: 12px; line-height: 16px; }
+  .stepper .v { min-width: 12px; text-align: center; color: #1d1d1f; font-weight: 600; }
+
+  .grid { flex: 1; display: grid; gap: 6px; }
+  .slot { background: #f5f5f7; border: 1.5px dashed #c6c6cc; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 4px; position: relative; min-height: 48px; }
+  .slot.over { border-color: #0071e3; background: rgba(0,113,227,.07); }
+  .chip { width: 100%; height: 100%; border-radius: 7px; background: #fff; border: 1px solid #d2d2d7; box-shadow: 0 1px 2px rgba(0,0,0,.08); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: grab; padding: 4px; text-align: center; }
+  .chip:active { cursor: grabbing; }
+  .chip .nm { font-size: 12px; font-weight: 600; word-break: break-word; }
+  .chip .kb { font-size: 10px; color: #86868b; }
+  .chip .x { position: absolute; top: 2px; right: 5px; color: #b0b0b5; font-size: 11px; cursor: pointer; padding: 2px 4px; display: none; }
+  .slot:hover .x { display: block; }
+  .chip .x:hover { color: #ff3b30; }
+  .empty { color: #aeaeb2; font-size: 11px; }
+
+  #tray { background: #fff; border-top: 1px solid #d2d2d7; padding: 10px 14px; max-height: 160px; overflow-y: auto; }
+  #tray input { width: 100%; border: 1px solid #d2d2d7; border-radius: 6px; padding: 5px 9px; font-size: 12px; margin-bottom: 8px; background: #f5f5f7; }
+  #tray input:focus { outline: 2px solid rgba(0,113,227,.4); background: #fff; }
+  #chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tchip { background: #f5f5f7; border: 1px solid #d2d2d7; border-radius: 12px; padding: 3px 10px; font-size: 11px; cursor: grab; }
+  .tchip:hover { border-color: #0071e3; color: #0071e3; }
+</style>
+</head>
+<body>
+  <div id="bar">
+    <select id="cfg"></select>
+    <button id="new" class="icon" title="Nueva configuración">＋</button>
+    <button id="del" class="icon" title="Eliminar configuración">🗑</button>
+    <button id="apply" class="primary">Aplicar ⌘⌥0</button>
+    <button id="applyClose">Aplicar y cerrar</button>
+    <span class="hint">arrastra para colocar (mueve la ventana al instante) · ⌘⌥N mueve la ventana frontal al hueco N · ⌘⌥⇧N la enfoca</span>
+    <button id="close">Cerrar</button>
+  </div>
+  <div id="monitors"></div>
+  <div id="tray">
+    <input id="filter" placeholder="Apps instaladas — arrastra a un hueco o doble clic para colocar en el primero libre">
+    <div id="chips"></div>
+  </div>
+<script>
+let S = null;
+let W = null; // copia de trabajo: Map(screen -> {cols, rows, slots:[app,...]})
+
+function post(a) {
+  if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.trisplit)
+    webkit.messageHandlers.trisplit.postMessage(JSON.stringify(a));
+}
+function screens() { return S.screens; }
+function cfg() { return S.configs[S.active - 1]; }
+
+function rebuildGroups() {
+  W = new Map();
+  for (const s of screens()) {
+    const m = cfg().monitors[s.name];
+    if (m) {
+      W.set(s.name, { cols: m.cols, rows: m.rows, slots: m.slots.map(a => a || "") });
+    } else {
+      W.set(s.name, { cols: 3, rows: 1, slots: ["", "", ""] });
+    }
+  }
+  for (const name of Object.keys(cfg().monitors)) {
+    if (!W.has(name)) W.set(name, cfg().monitors[name]);
+  }
+}
+function groups() { if (!W) rebuildGroups(); return W; }
+
+function persist() {
+  const g = groups();
+  const monitors = {};
+  for (const [name, m] of g) monitors[name] = { cols: m.cols, rows: m.rows, slots: m.slots };
+  cfg().monitors = monitors;
+  post({ action: "save", configs: S.configs, active: S.active });
+}
+
+function flatIndex(screen, idx) {
+  let n = 0;
+  for (const s of screens()) {
+    const m = groups().get(s.name);
+    if (!m) continue;
+    for (let i = 1; i <= m.slots.length; i++) {
+      n++;
+      if (s.name === screen && i === idx) return n;
+    }
+  }
+  return 0;
+}
+
+function setColsRows(name, dCols, dRows) {
+  const m = groups().get(name);
+  const cols = Math.min(6, Math.max(1, m.cols + dCols));
+  const rows = Math.min(4, Math.max(1, m.rows + dRows));
+  const total = cols * rows;
+  const next = [];
+  for (let i = 0; i < total; i++) next.push(m.slots[i] || "");
+  m.cols = cols; m.rows = rows; m.slots = next;
+  persist();
+  render();
+}
+
+function render() {
+  if (!S) return;
+  rebuildGroups();
+  const sel = document.getElementById("cfg");
+  sel.innerHTML = "";
+  S.configs.forEach((c, i) => {
+    const o = document.createElement("option");
+    o.textContent = c.name; o.value = i;
+    sel.appendChild(o);
+  });
+  sel.value = S.active - 1;
+
+  const mon = document.getElementById("monitors");
+  mon.innerHTML = "";
+  const totalW = screens().reduce((a, s) => a + s.w, 0) || 1;
+  for (const s of screens()) {
+    const m = groups().get(s.name);
+    const box = document.createElement("div");
+    box.className = "mon";
+    box.style.flex = (s.w / totalW) + " 1 0";
+
+    const head = document.createElement("div");
+    head.className = "monhead";
+    head.innerHTML = '<span class="nm"></span><span class="res">' + Math.round(s.w) + "×" + Math.round(s.h) + "</span>";
+    head.querySelector(".nm").textContent = s.name;
+    const st = document.createElement("div");
+    st.className = "steppers";
+    st.innerHTML =
+      '<span class="stepper">col <button data-dc="-1">−</button><span class="v">' + m.cols + '</span><button data-dc="1">＋</button></span>' +
+      '<span class="stepper">fil <button data-dr="-1">−</button><span class="v">' + m.rows + '</span><button data-dr="1">＋</button></span>';
+    st.querySelectorAll("button").forEach(b => b.onclick = () =>
+      setColsRows(s.name, +b.dataset.dc || 0, +b.dataset.dr || 0));
+    head.appendChild(st);
+    box.appendChild(head);
+
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    grid.style.gridTemplateColumns = "repeat(" + m.cols + ", 1fr)";
+    grid.style.gridTemplateRows = "repeat(" + m.rows + ", 1fr)";
+    m.slots.forEach((app, i) => {
+      const slot = document.createElement("div");
+      slot.className = "slot";
+      if (app) {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        chip.draggable = true;
+        chip.innerHTML = '<span class="x" title="quitar">✕</span><span class="nm"></span><span class="kb">⌘⌥' + flatIndex(s.name, i + 1) + "</span>";
+        chip.querySelector(".nm").textContent = app;
+        chip.querySelector(".x").onclick = (e) => { e.stopPropagation(); m.slots[i] = ""; persist(); render(); };
+        chip.ondragstart = (e) => {
+          e.dataTransfer.setData("text/plain", JSON.stringify({ app, screen: s.name, idx: i + 1 }));
+          e.dataTransfer.effectAllowed = "move";
+        };
+        slot.appendChild(chip);
+      } else {
+        slot.innerHTML = '<span class="empty">vacío</span>';
+      }
+      slot.ondragover = (e) => { e.preventDefault(); slot.classList.add("over"); };
+      slot.ondragleave = () => slot.classList.remove("over");
+      slot.ondrop = (e) => {
+        e.preventDefault();
+        slot.classList.remove("over");
+        let p; try { p = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
+        const tgt = groups().get(s.name);
+        if (p.tray) {
+          tgt.slots[i] = p.app;
+          post({ action: "liveMove", screen: s.name, idx: i + 1, app: p.app });
+        } else {
+          const src = groups().get(p.screen);
+          const tmp = tgt.slots[i];
+          tgt.slots[i] = src.slots[p.idx - 1];
+          src.slots[p.idx - 1] = tmp;
+          if (tgt.slots[i]) post({ action: "liveMove", screen: s.name, idx: i + 1, app: tgt.slots[i] });
+          if (src.slots[p.idx - 1]) post({ action: "liveMove", screen: p.screen, idx: p.idx, app: src.slots[p.idx - 1] });
+        }
+        persist();
+      };
+      grid.appendChild(slot);
+    });
+    box.appendChild(grid);
+    mon.appendChild(box);
+  }
+  renderChips();
+}
+
+function renderChips() {
+  const q = (document.getElementById("filter").value || "").toLowerCase();
+  const used = new Set();
+  for (const m of groups().values()) for (const a of m.slots) if (a) used.add(a);
+  const box = document.getElementById("chips");
+  box.innerHTML = "";
+  for (const a of S.apps) {
+    if (q && !a.toLowerCase().includes(q)) continue;
+    const c = document.createElement("div");
+    c.className = "tchip";
+    c.textContent = a;
+    c.draggable = true;
+    if (used.has(a)) c.style.opacity = .45;
+    c.ondragstart = (e) => {
+      e.dataTransfer.setData("text/plain", JSON.stringify({ app: a, tray: true }));
+      e.dataTransfer.effectAllowed = "copy";
+    };
+    c.ondblclick = () => {
+      for (const s of screens()) {
+        const m = groups().get(s.name);
+        for (let i = 0; i < m.slots.length; i++) {
+          if (!m.slots[i]) {
+            m.slots[i] = a;
+            post({ action: "liveMove", screen: s.name, idx: i + 1, app: a });
+            persist();
+            return;
+          }
+        }
+      }
+    };
+    box.appendChild(c);
+  }
+}
+
+document.getElementById("filter").oninput = renderChips;
+document.getElementById("cfg").onchange = (e) => { S.active = +e.target.value + 1; W = null; post({ action: "save", configs: S.configs, active: S.active }); render(); };
+document.getElementById("new").onclick = () => {
+  const name = prompt("Nombre de la configuración:");
+  if (!name) return;
+  const monitors = {};
+  for (const s of screens()) monitors[s.name] = { cols: 3, rows: 1, slots: ["", "", ""] };
+  S.configs.push({ name, monitors });
+  S.active = S.configs.length;
+  W = null;
+  post({ action: "save", configs: S.configs, active: S.active });
+  render();
+};
+document.getElementById("del").onclick = () => {
+  if (S.configs.length <= 1) return alert("Debe quedar al menos una configuración.");
+  if (!confirm('Eliminar "' + cfg().name + '"?')) return;
+  S.configs.splice(S.active - 1, 1);
+  S.active = Math.min(S.active, S.configs.length);
+  W = null;
+  post({ action: "save", configs: S.configs, active: S.active });
+  render();
+};
+document.getElementById("apply").onclick = () => post({ action: "apply" });
+document.getElementById("applyClose").onclick = () => post({ action: "applyAndClose" });
+document.getElementById("close").onclick = () => post({ action: "close" });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") post({ action: "close" }); });
+
+window.trisplitSetState = (s) => { S = s; W = null; render(); };
+document.addEventListener("DOMContentLoaded", () => post({ action: "ready" }));
+</script>
+</body>
+</html>
