@@ -312,7 +312,7 @@ local function panelState()
   local screens = {}
   for _, s in ipairs(sortedScreens()) do
     local f = s:frame()
-    screens[#screens + 1] = { name = s:name(), w = f.w, h = f.h }
+    screens[#screens + 1] = { name = s:name(), x = f.x, y = f.y, w = f.w, h = f.h }
   end
   return { screens = screens, configs = state.configs, active = state.active, apps = visibleApps() }
 end
@@ -375,6 +375,7 @@ local function openPanel()
   panel:windowStyle({ "titled", "closable", "miniaturizable", "resizable" })
   panel:windowTitle("Trisplit")
   panel:titleVisibility("visible")
+  panel:darkMode(true)
   panel:setLevel(0)
   panel:closeOnEscape(true)
   panel:html(html, "trisplit.local")
