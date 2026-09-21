@@ -53,32 +53,66 @@ T.saveState()
 -- webview fallback only: hide the native app
 os.execute("mv '" .. REPO .. "/TrisplitPanel.app' '" .. REPO .. "/TrisplitPanel.app.off' 2>/dev/null")
 
+local function runBlob()
+  trace("evalJS")
+  local f = io.open(REPO .. "/tests/panel_tests.js")
+  local js = f:read("a")
+  f:close()
+  local started = trisplit.evalJS(js, function(res, err)
+    trace("callback")
+    local msg = tostring(res)
+    if type(err) == "table" and (err.code or 0) ~= 0 then
+      local parts = {}
+      for k, v in pairs(err) do parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) end
+      msg = msg .. " | err: {" .. table.concat(parts, ", ") .. "}"
+    elseif err and type(err) ~= "table" then
+      msg = msg .. " | err: " .. tostring(err)
+    end
+    finish(msg)
+  end)
+  if not started then
+    trace("not started")
+    finish("panel-js: 0 passed, 1 failed\n  - webview not open")
+  end
+end
+
+-- guard against stale panels / push races: poll until the panel actually
+-- holds the deterministic config, nudging with a "ready" post if needed
+local function waitForPanelState()
+  local attempts = 0
+  local verify = [[(function(){
+    try {
+      var m = cfg().monitors[S.screens[0].name];
+      return (cfg().name === "JSDRV" && m && m.slots[0] === "Finder#1") ? "READY" : "WAIT";
+    } catch (e) { return "NOREADY"; }
+  })()]]
+  local check
+  check = function()
+    attempts = attempts + 1
+    trisplit.evalJS(verify, function(res)
+      if tostring(res) == "READY" then
+        runBlob()
+      elseif attempts < 10 then
+        if attempts >= 2 then
+          local okb, b64 = pcall(function()
+            return require("hs.base64").encode(hs.json.encode({ action = "ready" }))
+          end)
+          if okb then trisplit.handlePanelB64(b64) end
+        end
+        _G.__tjs = hs.timer.doAfter(1.5, check)
+      else
+        finish("panel-js: 0 passed, 1 failed\n  - panel never reached deterministic state")
+      end
+    end)
+  end
+  _G.__tjs = hs.timer.doAfter(1.0, check)
+end
+
 _G.__tjs = hs.timer.doAfter(3.0, function()
   trace("openPanel")
   local okk, err = pcall(trisplit.openPanel)
   trace("openPanel done ok=" .. tostring(okk) .. " err=" .. tostring(err))
-  _G.__tjs = hs.timer.doAfter(5.0, function()
-    trace("evalJS")
-    local f = io.open(REPO .. "/tests/panel_tests.js")
-    local js = f:read("a")
-    f:close()
-    local started = trisplit.evalJS(js, function(res, err)
-      trace("callback")
-      local msg = tostring(res)
-      if type(err) == "table" and (err.code or 0) ~= 0 then
-        local parts = {}
-        for k, v in pairs(err) do parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) end
-        msg = msg .. " | err: {" .. table.concat(parts, ", ") .. "}"
-      elseif err and type(err) ~= "table" then
-        msg = msg .. " | err: " .. tostring(err)
-      end
-      finish(msg)
-    end)
-    if not started then
-      trace("not started")
-      finish("panel-js: 0 passed, 1 failed\n  - webview not open")
-    end
-  end)
+  waitForPanelState()
 end)
 
 return "panel-js: started"
