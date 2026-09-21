@@ -285,13 +285,16 @@ local function focusSlot(n)
   local slot = flatSlots()[n]
   if not slot or slot.app == "" then return false end
   local app, idx = parseSpec(slot.app)
-  hs.application.launchOrFocus(namesFor(app)[1])
   local a = hs.application.get(namesFor(app)[1]) or hs.application.get(app)
   if a then
     local wins = visibleWindows(a)
     local w = wins[math.min(idx, #wins)]
-    if w then w:focus() end
+    if w then
+      w:focus()
+      return true
+    end
   end
+  hs.application.launchOrFocus(namesFor(app)[1])
   return true
 end
 

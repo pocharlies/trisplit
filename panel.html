@@ -91,6 +91,7 @@ function persist() {
   for (const [name, m] of g) monitors[name] = { cols: m.cols, rows: m.rows, slots: m.slots };
   cfg().monitors = monitors;
   post({ action: "save", configs: S.configs, active: S.active });
+  render();
 }
 
 function flatIndex(screen, idx) {
