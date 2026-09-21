@@ -74,12 +74,11 @@
     position: absolute; overflow: hidden; min-width: 240px; min-height: 130px;
     transition: box-shadow var(--t-1); cursor: move; touch-action: none;
   }
-  .mon.primary { cursor: default; outline: 2px solid var(--accent-mid); outline-offset: -1px; }
+  .mon.primary { outline: 2px solid var(--accent-mid); outline-offset: -1px; }
   .mon.dragging-target { outline: 2px solid color-mix(in srgb, AccentColor 45%, transparent); outline-offset: -1px; }
   .monhead { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: nowrap; }
   .mon.primary .monhead { cursor: default; }
   .monhead::before { content: "⠿"; color: GrayText; font-size: var(--f-sm); opacity: .6; flex-shrink: 0; }
-  .mon.primary .monhead::before { content: ""; }
   .monhead .idx { font: 600 var(--f-xxs)/1 ui-monospace, monospace; background: AccentColor; color: AccentColorText; border-radius: var(--r-xs); padding: 2px 4px; flex-shrink: 0; }
   .monhead .nm { font-size: var(--f-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .steppers { margin-left: auto; display: flex; gap: var(--sp-2); flex-shrink: 0; }
@@ -182,7 +181,7 @@ function arrange() { return S.arrange || {}; }
 
 function effRect(s) {
   const off = arrange()[s.name];
-  if (off && !isPrimary(s.name)) {
+  if (off) {
     const p = screens().find(o => o.name === S.primary) || screens()[0];
     return { x: p.x + (+off.dx || 0), y: p.y + (+off.dy || 0), w: s.w, h: s.h };
   }
@@ -297,7 +296,7 @@ function render() {
 
     const head = document.createElement("div");
     head.className = "monhead";
-    head.title = isPrimary(s.name) ? "Pantalla principal — fija" : "Arrastra para reordenar la disposición del mapa";
+    head.title = isPrimary(s.name) ? s.name + " (principal) — arrastra para moverla" : "Arrastra para reordenar la disposición";
     if (!isPrimary(s.name)) {
       const idx = document.createElement("span");
       idx.className = "idx"; idx.textContent = i + 1;
@@ -369,7 +368,7 @@ function render() {
     box.appendChild(grid);
     desk.appendChild(box);
 
-    if (!isPrimary(s.name)) box.onpointerdown = (e) => startArrangeDrag(e, s, box);
+    box.onpointerdown = (e) => startArrangeDrag(e, s, box);
   });
   renderChips();
 }
@@ -569,7 +568,7 @@ document.getElementById("apply").onclick = () => post({ action: "apply" });
 document.getElementById("applyClose").onclick = () => post({ action: "applyAndClose" });
 document.getElementById("resetArr").onclick = () => {
   S.arrange = {};
-  post({ action: "arrange", offsets: {} });
+  post({ action: "resetArrange" });
   render();
 };
 document.getElementById("applyArr").onclick = () => post({ action: "applyArrange" });

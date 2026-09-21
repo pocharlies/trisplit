@@ -380,36 +380,62 @@ local function parseDisplayplacer()
   return blocks
 end
 
+local function currentOffsets()
+  local offs = {}
+  for _, s in ipairs(hs.screen.allScreens()) do
+    local f = s:fullFrame()
+    offs[s:name()] = { dx = math.floor(f.x), dy = math.floor(f.y) }
+  end
+  return offs
+end
+
 local function applyArrangement(offsets)
   if not hs.fs.attributes(DISPLAYPLACER) then return false, "displayplacer no instalado" end
   local blocks = parseDisplayplacer()
   if not blocks or #blocks == 0 then return false, "displayplacer no devolvió pantallas" end
-  local mainBlock
-  for _, b in ipairs(blocks) do if b.main then mainBlock = b end end
-  if not mainBlock then return false, "sin pantalla principal" end
-  local mainScreen = primaryScreen()
-  local mf = mainScreen:fullFrame()
   local function arg(b, ox, oy)
     return "id:" .. b.id .. " res:" .. b.w .. "x" .. b.h .. " hz:" .. b.hertz
       .. " color_depth:" .. (b.depth or "8") .. " enabled:true scaling:" .. (b.scaling or "off")
       .. " origin:(" .. ox .. "," .. oy .. ") degree:" .. (b.rot or "0")
   end
-  local args = { arg(mainBlock, 0, 0) }
+  -- rects efectivas: offsets relativos a la pantalla con origen (0,0) actual
+  local rects = {}
   for _, s in ipairs(hs.screen.allScreens()) do
-    if s:name() ~= mainScreen:name() then
-      local f = s:fullFrame()
-      local curX, curY = math.floor(f.x - mf.x), math.floor(f.y - mf.y)
-      local match
-      for _, b in ipairs(blocks) do
-        if not b.main and b.w == math.floor(f.w) and b.h == math.floor(f.h)
-          and b.x == curX and b.y == curY then match = b break end
+    local f = s:fullFrame()
+    local off = offsets and offsets[s:name()]
+    rects[#rects + 1] = {
+      name = s:name(),
+      x = off and math.floor(off.dx) or math.floor(f.x),
+      y = off and math.floor(off.dy) or math.floor(f.y),
+      w = math.floor(f.w), h = math.floor(f.h),
+    }
+  end
+  -- la nueva principal es la que queda en el origen (0,0); si ninguna, la más arriba-izquierda
+  local newMain = nil
+  for _, r in ipairs(rects) do
+    if r.x == 0 and r.y == 0 then newMain = r break end
+  end
+  if not newMain then
+    table.sort(rects, function(a, b)
+      if a.x ~= b.x then return a.x < b.x end
+      return a.y < b.y
+    end)
+    newMain = rects[1]
+  end
+  local args = {}
+  for _, r in ipairs(rects) do
+    local curX, curY, match
+    for _, s in ipairs(hs.screen.allScreens()) do
+      if s:name() == r.name then
+        local f = s:fullFrame()
+        curX, curY = math.floor(f.x), math.floor(f.y)
       end
-      if not match then return false, "no se encontró " .. s:name() .. " en displayplacer" end
-      local off = offsets and offsets[s:name()]
-      local nx, ny = curX, curY
-      if off then nx = math.floor(off.dx or 0); ny = math.floor(off.dy or 0) end
-      args[#args + 1] = arg(match, nx, ny)
     end
+    for _, b in ipairs(blocks) do
+      if b.w == r.w and b.h == r.h and b.x == curX and b.y == curY then match = b break end
+    end
+    if not match then return false, "no se encontró " .. r.name .. " en displayplacer" end
+    args[#args + 1] = arg(match, r.x - newMain.x, r.y - newMain.y)
   end
   local cmd = DISPLAYPLACER
   for _, a in ipairs(args) do cmd = cmd .. " '" .. a .. "'" end
@@ -456,8 +482,20 @@ local function handlePanel(msg)
   elseif action == "liveMove" then
     liveMove(m.screen, m.idx, m.app or "")
   elseif action == "arrange" then
+    if next(state.arrange or {}) == nil and next(m.offsets or {}) ~= nil then
+      state.arrangeOriginal = currentOffsets()
+    end
     state.arrange = m.offsets or {}
     saveState()
+  elseif action == "resetArrange" then
+    if state.arrangeOriginal and next(state.arrange or {}) == nil then
+      applyArrangement(state.arrangeOriginal)
+      hs.alert.show("Disposición original restaurada")
+    end
+    state.arrange = {}
+    state.arrangeOriginal = nil
+    saveState()
+    hs.timer.doAfter(1.2, pushPanel)
   elseif action == "applyArrange" then
     local ok, err = applyArrangement(state.arrange)
     if ok then
