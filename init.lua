@@ -171,6 +171,22 @@ local function anyWindow(app)
   return nil
 end
 
+local function visibleWindows(app)
+  local out = {}
+  for _, w in ipairs(app:allWindows()) do
+    if w:isStandard() and not w:isMinimized() then out[#out + 1] = w end
+  end
+  table.sort(out, function(a, b) return a:id() < b:id() end)
+  return out
+end
+
+-- "App#N" = N-ésima ventana de la app (por defecto 1)
+local function parseSpec(spec)
+  local name, idx = spec:match("^(.-)#(%d+)$")
+  if name then return name, tonumber(idx) end
+  return spec, 1
+end
+
 local function placeWindow(win, frame, screen)
   if win:isMinimized() then win:unminimize() end
   if win:isFullscreen() then
@@ -184,14 +200,16 @@ local function placeWindow(win, frame, screen)
   win:setFrame(frame, ANIM)
 end
 
-local function placeApp(app, frame, screen)
+local function placeApp(spec, frame, screen)
+  local app, idx = parseSpec(spec)
   local names = namesFor(app)
   local a = ensureRunning(names)
   if not a then
     log.e("app no encontrada: " .. app)
     return false
   end
-  local win = anyWindow(a)
+  local wins = visibleWindows(a)
+  local win = wins[math.min(idx, #wins)]
   if not win then
     a:activate(true)
     win = findWindow(a)
@@ -252,7 +270,13 @@ local function moveFrontToSlot(n)
   placeWindow(win, gridFrame(s, slot.idx, slot.cols, slot.rows), s)
   win:focus()
   win:raise()
-  activeConfig().monitors[slot.screen].slots[slot.idx] = win:application():name()
+  local app = win:application():name()
+  local wins = visibleWindows(win:application())
+  local idx = 1
+  for i, w in ipairs(wins) do
+    if w:id() == win:id() then idx = i break end
+  end
+  activeConfig().monitors[slot.screen].slots[slot.idx] = app .. (idx > 1 and ("#" .. idx) or "")
   saveState()
   return true
 end
@@ -260,7 +284,14 @@ end
 local function focusSlot(n)
   local slot = flatSlots()[n]
   if not slot or slot.app == "" then return false end
-  hs.application.launchOrFocus(namesFor(slot.app)[1])
+  local app, idx = parseSpec(slot.app)
+  hs.application.launchOrFocus(namesFor(app)[1])
+  local a = hs.application.get(namesFor(app)[1]) or hs.application.get(app)
+  if a then
+    local wins = visibleWindows(a)
+    local w = wins[math.min(idx, #wins)]
+    if w then w:focus() end
+  end
   return true
 end
 
@@ -296,15 +327,16 @@ local function visibleApps()
       local ok, hid = pcall(function() return a:isHidden() end)
       if ok then hidden = hid end
       if not hidden then
-        local has = false
-        for _, w in ipairs(a:allWindows()) do
-          if w:isStandard() and not w:isMinimized() then has = true break end
+        local wins = visibleWindows(a)
+        if #wins > 0 then
+          local titles = {}
+          for i, w in ipairs(wins) do titles[i] = w:title() or "" end
+          out[#out + 1] = { name = a:name(), count = #wins, titles = titles }
         end
-        if has then out[#out + 1] = a:name() end
       end
     end
   end
-  table.sort(out, function(x, y) return x:lower() < y:lower() end)
+  table.sort(out, function(x, y) return x.name:lower() < y.name:lower() end)
   return out
 end
 
@@ -354,7 +386,16 @@ local function handlePanel(msg)
   end
 end
 
+local function appPanelPath()
+  return assetPath("TrisplitPanel.app")
+end
+
 local function openPanel()
+  local appPath = appPanelPath()
+  if appPath then
+    os.execute('open "' .. appPath .. '"')
+    return
+  end
   if panel then
     panel:show()
     panel:bringToFront()
@@ -438,6 +479,17 @@ rawset(_G, "trisplit", {
   moveFrontToSlot = moveFrontToSlot,
   focusSlot = focusSlot,
   liveMove = liveMove,
+  slotFrame = function(n)
+    local slot = flatSlots()[n]
+    if not slot then return nil end
+    local s = screenByName(slot.screen)
+    if not s then return nil end
+    return gridFrame(s, slot.idx, slot.cols, slot.rows)
+  end,
+  handlePanelB64 = function(b64)
+    local ok, dec = pcall(function() return require("hs.base64").decode(b64) end)
+    if ok and dec then handlePanel(dec) end
+  end,
   menubar = function() return mb end,
   evalJS = function(js, cb)
     if not panel then return false end

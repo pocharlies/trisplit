@@ -32,8 +32,7 @@
   .chip:active { cursor: grabbing; }
   .chip .nm { font-size: 12px; font-weight: 600; word-break: break-word; }
   .chip .kb { font-size: 10px; color: GrayText; }
-  .chip .x { position: absolute; top: 2px; right: 5px; color: GrayText; font-size: 11px; cursor: pointer; padding: 2px 4px; display: none; }
-  .slot:hover .x { display: block; }
+  .chip .x { position: absolute; top: 2px; right: 5px; color: -apple-system-tertiary-label; font-size: 12px; cursor: pointer; padding: 2px 5px; }
   .chip .x:hover { color: #ff3b30; }
   .empty { color: GrayText; font-size: 11px; }
 
@@ -179,7 +178,7 @@ function render() {
         chip.className = "chip";
         chip.draggable = true;
         chip.innerHTML = '<span class="x" title="quitar">✕</span><span class="nm"></span><span class="kb">⌘⌥' + flatIndex(s.name, i + 1) + "</span>";
-        chip.querySelector(".nm").textContent = app;
+        chip.querySelector(".nm").textContent = app.replace(/#(\d+)$/, " · v$1");
         chip.querySelector(".x").onclick = (e) => { e.stopPropagation(); m.slots[i] = ""; persist(); render(); };
         chip.ondragstart = (e) => {
           e.dataTransfer.setData("text/plain", JSON.stringify({ app, screen: s.name, idx: i + 1 }));
@@ -217,37 +216,49 @@ function render() {
   renderChips();
 }
 
+function placeInFirstFree(spec) {
+  for (const s of screens()) {
+    const m = groups().get(s.name);
+    for (let i = 0; i < m.slots.length; i++) {
+      if (!m.slots[i]) {
+        m.slots[i] = spec;
+        post({ action: "liveMove", screen: s.name, idx: i + 1, app: spec });
+        persist();
+        return;
+      }
+    }
+  }
+}
+
 function renderChips() {
   const q = (document.getElementById("filter").value || "").toLowerCase();
   const used = new Set();
-  for (const m of groups().values()) for (const a of m.slots) if (a) used.add(a);
+  for (const m of groups().values())
+    for (const a of m.slots) if (a) used.add(a.split("#")[0]);
   const box = document.getElementById("chips");
   box.innerHTML = "";
-  for (const a of S.apps) {
-    if (q && !a.toLowerCase().includes(q)) continue;
-    const c = document.createElement("div");
-    c.className = "tchip";
-    c.textContent = a;
-    c.draggable = true;
-    if (used.has(a)) c.style.opacity = .45;
-    c.ondragstart = (e) => {
-      e.dataTransfer.setData("text/plain", JSON.stringify({ app: a, tray: true }));
-      e.dataTransfer.effectAllowed = "copy";
-    };
-    c.ondblclick = () => {
-      for (const s of screens()) {
-        const m = groups().get(s.name);
-        for (let i = 0; i < m.slots.length; i++) {
-          if (!m.slots[i]) {
-            m.slots[i] = a;
-            post({ action: "liveMove", screen: s.name, idx: i + 1, app: a });
-            persist();
-            return;
-          }
-        }
+  for (const app of S.apps) {
+    if (q && !app.name.toLowerCase().includes(q)) continue;
+    const n = app.count || 1;
+    for (let i = 1; i <= n; i++) {
+      const spec = i > 1 ? app.name + "#" + i : app.name;
+      const c = document.createElement("div");
+      c.className = "tchip";
+      let label = app.name;
+      if (n > 1) {
+        const t = ((app.titles && app.titles[i - 1]) || "").slice(0, 22);
+        label = app.name + " · v" + i + (t ? " — " + t : "");
       }
-    };
-    box.appendChild(c);
+      c.textContent = label;
+      c.draggable = true;
+      if (used.has(app.name)) c.style.opacity = .45;
+      c.ondragstart = (e) => {
+        e.dataTransfer.setData("text/plain", JSON.stringify({ app: spec, tray: true }));
+        e.dataTransfer.effectAllowed = "copy";
+      };
+      c.ondblclick = () => placeInFirstFree(spec);
+      box.appendChild(c);
+    }
   }
 }
 
