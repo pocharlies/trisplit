@@ -343,16 +343,91 @@ local function visibleApps()
   return out
 end
 
+local DISPLAYPLACER = "/opt/homebrew/bin/displayplacer"
+
+local function primaryScreen()
+  for _, s in ipairs(hs.screen.allScreens()) do
+    local f = s:fullFrame()
+    if f.x == 0 and f.y == 0 then return s end
+  end
+  return hs.screen.mainScreen()
+end
+
+local function parseDisplayplacer()
+  local p = io.popen(DISPLAYPLACER .. " list 2>/dev/null")
+  if not p then return nil end
+  local txt = p:read("a"); p:close()
+  local blocks, cur = {}, nil
+  for line in txt:gmatch("[^\n]+") do
+    local id = line:match("^Persistent screen id: ([%w%-]+)")
+    if id then cur = { id = id }; blocks[#blocks + 1] = cur end
+    if cur then
+      local w, h = line:match("^Resolution: (%d+)x(%d+)")
+      if w then cur.w, cur.h = tonumber(w), tonumber(h) end
+      local hz = line:match("^Hertz: ([%d%.]+)")
+      if hz then cur.hertz = hz end
+      local ox, oy = line:match("^Origin: %((%-?%d+),(%-?%d+)%)")
+      if ox then cur.x, cur.y = tonumber(ox), tonumber(oy) end
+      if line:match("main display") then cur.main = true end
+      local rot = line:match("^Rotation: (%d+)")
+      if rot then cur.rot = rot end
+      local sc = line:match("^Scaling: (%a+)")
+      if sc then cur.scaling = sc end
+      local cd = line:match("^Color Depth: (%d+)")
+      if cd then cur.depth = cd end
+    end
+  end
+  return blocks
+end
+
+local function applyArrangement(offsets)
+  if not hs.fs.attributes(DISPLAYPLACER) then return false, "displayplacer no instalado" end
+  local blocks = parseDisplayplacer()
+  if not blocks or #blocks == 0 then return false, "displayplacer no devolvió pantallas" end
+  local mainBlock
+  for _, b in ipairs(blocks) do if b.main then mainBlock = b end end
+  if not mainBlock then return false, "sin pantalla principal" end
+  local mainScreen = primaryScreen()
+  local mf = mainScreen:fullFrame()
+  local function arg(b, ox, oy)
+    return "id:" .. b.id .. " res:" .. b.w .. "x" .. b.h .. " hz:" .. b.hertz
+      .. " color_depth:" .. (b.depth or "8") .. " enabled:true scaling:" .. (b.scaling or "off")
+      .. " origin:(" .. ox .. "," .. oy .. ") degree:" .. (b.rot or "0")
+  end
+  local args = { arg(mainBlock, 0, 0) }
+  for _, s in ipairs(hs.screen.allScreens()) do
+    if s:name() ~= mainScreen:name() then
+      local f = s:fullFrame()
+      local curX, curY = math.floor(f.x - mf.x), math.floor(f.y - mf.y)
+      local match
+      for _, b in ipairs(blocks) do
+        if not b.main and b.w == math.floor(f.w) and b.h == math.floor(f.h)
+          and b.x == curX and b.y == curY then match = b break end
+      end
+      if not match then return false, "no se encontró " .. s:name() .. " en displayplacer" end
+      local off = offsets and offsets[s:name()]
+      local nx, ny = curX, curY
+      if off then nx = math.floor(off.dx or 0); ny = math.floor(off.dy or 0) end
+      args[#args + 1] = arg(match, nx, ny)
+    end
+  end
+  local cmd = DISPLAYPLACER
+  for _, a in ipairs(args) do cmd = cmd .. " '" .. a .. "'" end
+  local ok = os.execute(cmd)
+  return ok == true or ok == 0, cmd
+end
+
 local function panelState()
   local screens = {}
   for _, s in ipairs(sortedScreens()) do
-    local f = s:frame()
+    local f = s:fullFrame()
     screens[#screens + 1] = { name = s:name(), x = f.x, y = f.y, w = f.w, h = f.h }
   end
   local arrange = state.arrange or {}
   if next(arrange) == nil then arrange = setmetatable({}, { __hsjson_type = "o" }) end
   return { screens = screens, configs = state.configs, active = state.active,
-           apps = visibleApps(), primary = hs.screen.mainScreen():name(), arrange = arrange }
+           apps = visibleApps(), primary = primaryScreen():name(), arrange = arrange,
+           hasDisplayplacer = hs.fs.attributes(DISPLAYPLACER) ~= nil }
 end
 
 local function pushPanel()
@@ -383,6 +458,18 @@ local function handlePanel(msg)
   elseif action == "arrange" then
     state.arrange = m.offsets or {}
     saveState()
+  elseif action == "applyArrange" then
+    local ok, err = applyArrangement(state.arrange)
+    if ok then
+      state.arrange = {}
+      saveState()
+      hs.alert.show("Disposición aplicada a macOS")
+      hs.timer.doAfter(1.2, pushPanel)
+    else
+      log.e("arrange falló: " .. tostring(err))
+      hs.alert.show("No se pudo aplicar la disposición")
+      pushPanel()
+    end
   elseif action == "apply" then
     applyConfig()
   elseif action == "applyAndClose" then
@@ -484,6 +571,7 @@ rawset(_G, "trisplit", {
   openPanel = openPanel,
   state = function() return state end,
   panelState = panelState,
+  applyArrangement = applyArrangement,
   flatSlots = flatSlots,
   moveFrontToSlot = moveFrontToSlot,
   focusSlot = focusSlot,

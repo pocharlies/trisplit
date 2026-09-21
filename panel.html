@@ -72,11 +72,11 @@
     background: Field; border-radius: var(--r-lg); box-shadow: var(--shadow-md);
     padding: var(--sp-2) var(--sp-3) var(--sp-3); display: flex; flex-direction: column;
     position: absolute; overflow: hidden; min-width: 240px; min-height: 130px;
-    transition: box-shadow var(--t-1);
+    transition: box-shadow var(--t-1); cursor: move; touch-action: none;
   }
-  .mon.primary { outline: 2px solid var(--accent-mid); outline-offset: -1px; }
+  .mon.primary { cursor: default; outline: 2px solid var(--accent-mid); outline-offset: -1px; }
   .mon.dragging-target { outline: 2px solid color-mix(in srgb, AccentColor 45%, transparent); outline-offset: -1px; }
-  .monhead { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: nowrap; cursor: move; touch-action: none; }
+  .monhead { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: nowrap; }
   .mon.primary .monhead { cursor: default; }
   .monhead::before { content: "⠿"; color: GrayText; font-size: var(--f-sm); opacity: .6; flex-shrink: 0; }
   .mon.primary .monhead::before { content: ""; }
@@ -158,8 +158,9 @@
     </span>
   </div>
   <div id="banner">
-    <span>Disposición manual — solo afecta a este mapa (las teclas usan la posición real de macOS)</span>
-    <button id="resetArr">Restablecer a la real</button>
+    <span></span>
+    <button id="applyArr" class="primary" style="display:none">Aplicar a macOS</button>
+    <button id="resetArr">Restablecer</button>
   </div>
   <div id="monitors"></div>
   <div id="tray">
@@ -248,7 +249,19 @@ function render() {
   sel.value = S.active - 1;
 
   const banner = document.getElementById("banner");
-  banner.style.display = Object.keys(arrange()).length ? "flex" : "none";
+  const hasArr = Object.keys(arrange()).length > 0;
+  banner.style.display = hasArr ? "flex" : "none";
+  if (hasArr) {
+    const span = banner.querySelector("span");
+    const applyBtn = document.getElementById("applyArr");
+    if (S.hasDisplayplacer) {
+      span.textContent = "Disposición manual pendiente — aplícala a macOS";
+      applyBtn.style.display = "";
+    } else {
+      span.textContent = "Disposición manual — solo afecta a este mapa (instala displayplacer para aplicarla a macOS)";
+      applyBtn.style.display = "none";
+    }
+  }
 
   const mon = document.getElementById("monitors");
   mon.innerHTML = "";
@@ -356,13 +369,13 @@ function render() {
     box.appendChild(grid);
     desk.appendChild(box);
 
-    if (!isPrimary(s.name)) head.onpointerdown = (e) => startArrangeDrag(e, s, box);
+    if (!isPrimary(s.name)) box.onpointerdown = (e) => startArrangeDrag(e, s, box);
   });
   renderChips();
 }
 
 function startArrangeDrag(e, s, box) {
-  if (e.target.closest("button")) return;
+  if (e.target.closest("button, .chip, input, select")) return;
   e.preventDefault();
   const desk = document.getElementById("desk");
   const sc = mapScale;
@@ -559,6 +572,7 @@ document.getElementById("resetArr").onclick = () => {
   post({ action: "arrange", offsets: {} });
   render();
 };
+document.getElementById("applyArr").onclick = () => post({ action: "applyArrange" });
 
 window.trisplitSetState = (s) => { S = s; W = null; render(); };
 document.addEventListener("DOMContentLoaded", () => post({ action: "ready" }));
