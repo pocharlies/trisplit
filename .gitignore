@@ -1,0 +1,4 @@
+TrisplitPanel.app/
+*.o
+.DS_Store
+/tmp/

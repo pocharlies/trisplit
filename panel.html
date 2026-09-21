@@ -572,7 +572,10 @@ document.getElementById("resetArr").onclick = () => {
 };
 document.getElementById("applyArr").onclick = () => post({ action: "applyArrange" });
 
-window.trisplitSetState = (s) => { S = s; W = null; render(); };
+window.trisplitSetState = (s) => {
+  if (Array.isArray(s.arrange)) s.arrange = {};
+  S = s; W = null; render();
+};
 document.addEventListener("DOMContentLoaded", () => post({ action: "ready" }));
 </script>
 </body>

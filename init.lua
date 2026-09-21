@@ -557,7 +557,12 @@ local function openPanel()
   panel:show()
   panel:bringToFront()
   local w = panel:hswindow()
-  if w then w:center() end
+  if w then
+    local sf = hs.screen.mainScreen():frame()
+    w:setFrame(hs.geometry({
+      x = sf.x + (sf.w - 1100) / 2, y = sf.y + (sf.h - 680) / 2, w = 1100, h = 680,
+    }))
+  end
   hs.timer.doAfter(1.0, pushPanel)
 end
 
@@ -632,6 +637,18 @@ rawset(_G, "trisplit", {
     return true
   end,
   panelObj = function() return panel end,
+  _test = {
+    gridFrame = gridFrame, parseSpec = parseSpec, newMonitorGrid = newMonitorGrid,
+    migrate = migrate, namesFor = namesFor, visibleWindows = visibleWindows,
+    currentOffsets = currentOffsets, parseDisplayplacer = parseDisplayplacer,
+    primaryScreen = primaryScreen, sortedScreens = sortedScreens,
+    screenByName = screenByName, activeConfig = activeConfig,
+    saveState = saveState, loadState = loadState, defaultConfig = defaultConfig,
+    closePanel = function()
+      if panel then panel:hide(); panel = nil end
+    end,
+    store = STORE,
+  },
 })
 
 log.i("trisplit v3 cargado")
