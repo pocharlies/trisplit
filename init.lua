@@ -456,11 +456,46 @@ local function panelState()
            hasDisplayplacer = hs.fs.attributes(DISPLAYPLACER) ~= nil }
 end
 
+local PANELFILE = hs.configdir .. "/.trisplit_panel_state.json"
+
 local function pushPanel()
+  local encoded = hs.json.encode(panelState())
+  local f = io.open(PANELFILE, "w")
+  if f then f:write(encoded); f:close() end
   if panel then
-    panel:evaluateJavaScript("trisplitSetState(" .. hs.json.encode(panelState()) .. ")")
+    panel:evaluateJavaScript("trisplitSetState(" .. encoded .. ")")
   end
 end
+
+-- refresco en vivo: apps/ventanas nuevas desaparecen o aparecen en el panel
+local pushPending, pushTimer = false, nil
+local function schedulePush()
+  if pushPending then return end
+  pushPending = true
+  pushTimer = hs.timer.doAfter(0.7, function()
+    pushPending = false
+    pushPanel()
+  end)
+end
+
+local appWatcher = hs.application.watcher.new(function(_, event)
+  if event == hs.application.watcher.launched
+    or event == hs.application.watcher.started
+    or event == hs.application.watcher.terminated
+    or event == hs.application.watcher.hidden
+    or event == hs.application.watcher.unhidden then
+    schedulePush()
+  end
+end)
+appWatcher:start()
+
+local winFilter = hs.window.filter.new(function(w)
+  local a = w:application()
+  return a and a:kind() == 1
+end)
+winFilter:subscribe({
+  "windowCreated", "windowDestroyed", "windowMinimized", "windowUnminimized",
+}, function() schedulePush() end)
 
 local function handlePanel(msg)
   local raw = msg
@@ -647,7 +682,10 @@ rawset(_G, "trisplit", {
     closePanel = function()
       if panel then panel:hide(); panel = nil end
     end,
+    panelFile = PANELFILE,
     store = STORE,
+    -- keep watchers alive (chunk locals are otherwise GC'd after load)
+    _watchers = { appWatcher = appWatcher, winFilter = winFilter },
   },
 })
 

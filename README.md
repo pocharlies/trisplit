@@ -26,6 +26,9 @@ native panel that moves the **real windows** while you drag.
   (with snapping, magnetic edges and alignment guides) and apply the new
   arrangement to macOS via [displayplacer](https://github.com/jakehilborn/displayplacer).
   Includes a **Reset** button that restores the previous arrangement.
+- **Live tray updates** — apps and windows launched, closed, hidden or
+  minimized while the panel is open appear and disappear in real time
+  (application + window watchers, debounced).
 - **Menu bar icon** — monochrome template icon with one-click panel access.
   Hammerspoon's own menu bar / Dock icons are hidden.
 - **macOS native styling** — system colors (`Canvas`, `AccentColor`, …),

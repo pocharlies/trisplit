@@ -53,6 +53,7 @@ T.saveState()
 -- webview fallback only: hide the native app
 os.execute("mv '" .. REPO .. "/TrisplitPanel.app' '" .. REPO .. "/TrisplitPanel.app.off' 2>/dev/null")
 
+local liveResult = ""
 local function runBlob()
   trace("evalJS")
   local f = io.open(REPO .. "/tests/panel_tests.js")
@@ -68,12 +69,38 @@ local function runBlob()
     elseif err and type(err) ~= "table" then
       msg = msg .. " | err: " .. tostring(err)
     end
-    finish(msg)
+    finish(msg .. " | live-refresh: " .. liveResult
+      .. (liveResult == "LIVE-OK" and "" or " | 1 failed (live refresh)"))
   end)
   if not started then
     trace("not started")
     finish("panel-js: 0 passed, 1 failed\n  - webview not open")
   end
+end
+
+-- live refresh: launching an app must appear in the panel without reopening
+local function runLiveCheck(nextStep)
+  os.execute("pkill -x Calculator 2>/dev/null; sleep 0.3; open -ga Calculator")
+  _G.__tjs = hs.timer.doAfter(2.5, function()
+    trisplit.evalJS(
+      '(function(){ return (S.apps||[]).some(a => a.name === "Calculator") ? "LIVE-OK" : "LIVE-MISS"; })()',
+      function(res)
+        liveResult = tostring(res)
+        os.execute("pkill -x Calculator 2>/dev/null")
+        _G.__tjs = hs.timer.doAfter(1.5, function()
+          trisplit.evalJS(
+            '(function(){ return (S.apps||[]).some(a => a.name === "Calculator") ? "LIVE-STALE" : "LIVE-GONE"; })()',
+            function(res2)
+              if liveResult == "LIVE-OK" and tostring(res2) == "LIVE-GONE" then
+                liveResult = "LIVE-OK"
+              else
+                liveResult = "LIVE-FAIL(" .. liveResult .. "," .. tostring(res2) .. ")"
+              end
+              nextStep()
+            end)
+        end)
+      end)
+  end)
 end
 
 -- guard against stale panels / push races: poll until the panel actually
@@ -91,7 +118,7 @@ local function waitForPanelState()
     attempts = attempts + 1
     trisplit.evalJS(verify, function(res)
       if tostring(res) == "READY" then
-        runBlob()
+        runLiveCheck(runBlob)
       elseif attempts < 10 then
         if attempts >= 2 then
           local okb, b64 = pcall(function()

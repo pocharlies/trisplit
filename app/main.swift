@@ -26,6 +26,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNa
   var window: NSWindow!
   var webview: WKWebView!
   var saveTimer: Timer?
+  var stateTimer: Timer?
+  var lastStateDate: Date?
+  var lastStateJSON = ""
+  let stateFile = ("~/.hammerspoon/.trisplit_panel_state.json" as NSString).expandingTildeInPath
 
   func applicationDidFinishLaunching(_ note: Notification) {
     NSApp.setActivationPolicy(.accessory)
@@ -50,6 +54,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNa
 
     window.makeKeyAndOrderFront(nil)
     NSApp.activate(ignoringOtherApps: true)
+
+    stateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+      self.checkStateFile()
+    }
+  }
+
+  func checkStateFile() {
+    guard let attrs = try? FileManager.default.attributesOfItem(atPath: stateFile),
+          let mtime = attrs[.modificationDate] as? Date else { return }
+    if lastStateDate == mtime { return }
+    lastStateDate = mtime
+    guard let str = try? String(contentsOfFile: stateFile, encoding: .utf8),
+          str.hasPrefix("{"), str != lastStateJSON else { return }
+    lastStateJSON = str
+    webview.evaluateJavaScript("trisplitSetState(\(str))")
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -65,14 +84,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNa
 
   func fetchState() {
     runHS("return hs.json.encode(trisplit.panelState())") { out in
-      FileHandle.standardError.write("fetchState -> \(String(describing: out?.prefix(80)))\n".data(using: .utf8)!)
       guard let out, let lo = out.firstIndex(of: "{"), let hi = out.lastIndex(of: "}") else { return }
       let json = String(out[lo...hi])
-      self.webview.evaluateJavaScript("trisplitSetState(\(json))") { _, _ in
-        self.webview.evaluateJavaScript("document.querySelectorAll('#chips .tchip').length + ' chips: ' + Array.from(document.querySelectorAll('#chips .tchip')).slice(0,12).map(c => c.textContent).join(' | ')") { r, _ in
-          FileHandle.standardError.write("chips -> \(String(describing: r))\n".data(using: .utf8)!)
-        }
+      if json == self.lastStateJSON { return }
+      self.lastStateJSON = json
+      if let attrs = try? FileManager.default.attributesOfItem(atPath: self.stateFile) {
+        self.lastStateDate = attrs[.modificationDate] as? Date
       }
+      self.webview.evaluateJavaScript("trisplitSetState(\(json))")
     }
   }
 
