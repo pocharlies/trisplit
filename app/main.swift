@@ -66,8 +66,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNa
   func fetchState() {
     runHS("return hs.json.encode(trisplit.panelState())") { out in
       FileHandle.standardError.write("fetchState -> \(String(describing: out?.prefix(80)))\n".data(using: .utf8)!)
-      guard let out, out.hasPrefix("{") else { return }
-      self.webview.evaluateJavaScript("trisplitSetState(\(out))") { _, _ in
+      guard let out, let lo = out.firstIndex(of: "{"), let hi = out.lastIndex(of: "}") else { return }
+      let json = String(out[lo...hi])
+      self.webview.evaluateJavaScript("trisplitSetState(\(json))") { _, _ in
         self.webview.evaluateJavaScript("document.querySelectorAll('#chips .tchip').length + ' chips: ' + Array.from(document.querySelectorAll('#chips .tchip')).slice(0,12).map(c => c.textContent).join(' | ')") { r, _ in
           FileHandle.standardError.write("chips -> \(String(describing: r))\n".data(using: .utf8)!)
         }

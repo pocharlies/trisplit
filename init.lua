@@ -349,7 +349,10 @@ local function panelState()
     local f = s:frame()
     screens[#screens + 1] = { name = s:name(), x = f.x, y = f.y, w = f.w, h = f.h }
   end
-  return { screens = screens, configs = state.configs, active = state.active, apps = visibleApps() }
+  local arrange = state.arrange or {}
+  if next(arrange) == nil then arrange = setmetatable({}, { __hsjson_type = "o" }) end
+  return { screens = screens, configs = state.configs, active = state.active,
+           apps = visibleApps(), primary = hs.screen.mainScreen():name(), arrange = arrange }
 end
 
 local function pushPanel()
@@ -377,6 +380,9 @@ local function handlePanel(msg)
     pushPanel()
   elseif action == "liveMove" then
     liveMove(m.screen, m.idx, m.app or "")
+  elseif action == "arrange" then
+    state.arrange = m.offsets or {}
+    saveState()
   elseif action == "apply" then
     applyConfig()
   elseif action == "applyAndClose" then

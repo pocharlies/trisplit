@@ -3,64 +3,172 @@
 <head>
 <meta charset="utf-8">
 <style>
-  :root { color-scheme: light dark; }
+  :root {
+    color-scheme: light dark;
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
+    --r-xs: 5px; --r-sm: 7px; --r-md: 10px; --r-lg: 14px;
+    --f-xxs: 10px; --f-xs: 11px; --f-sm: 12px; --f-md: 13px; --f-lg: 15px;
+    --shadow-hair: 0 0 0 .5px rgb(0 0 0 / .10);
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / .08), var(--shadow-hair);
+    --shadow-md: 0 4px 12px rgb(0 0 0 / .14), var(--shadow-hair);
+    --shadow-pop: 0 12px 32px rgb(0 0 0 / .28), var(--shadow-hair);
+    --accent-soft: color-mix(in srgb, AccentColor 12%, transparent);
+    --accent-mid: color-mix(in srgb, AccentColor 30%, transparent);
+    --accent-line: color-mix(in srgb, AccentColor 55%, transparent);
+    --hair: color-mix(in srgb, CanvasText 12%, transparent);
+    --fill-thin: color-mix(in srgb, CanvasText 4%, transparent);
+    --fill-thick: color-mix(in srgb, CanvasText 8%, transparent);
+    --ease: cubic-bezier(.32,.72,0,1);
+    --t-1: 120ms var(--ease);
+    --t-2: 200ms var(--ease);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --shadow-hair: 0 0 0 .5px rgb(255 255 255 / .10);
+      --shadow-sm: 0 1px 2px rgb(0 0 0 / .30), var(--shadow-hair);
+      --shadow-md: 0 4px 14px rgb(0 0 0 / .40), var(--shadow-hair);
+      --shadow-pop: 0 14px 40px rgb(0 0 0 / .55), var(--shadow-hair);
+      --hair: color-mix(in srgb, CanvasText 18%, transparent);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; }
+  }
   * { box-sizing: border-box; font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif; }
-  body { margin: 0; background: Canvas; color: CanvasText; height: 100vh; display: flex; flex-direction: column; font-size: 13px; }
+  body { margin: 0; background: Canvas; color: CanvasText; height: 100vh; display: flex; flex-direction: column; font-size: var(--f-md); letter-spacing: -0.01em; }
 
-  #bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; user-select: none; }
-  #bar select { font-size: 13px; padding: 4px 8px; border: 1px solid rgba(120,120,128,.35); border-radius: 6px; background: Field; color: FieldText; }
-  button { font-size: 13px; padding: 4px 12px; border: 1px solid rgba(120,120,128,.35); border-radius: 6px; background: ButtonFace; color: FieldText; cursor: pointer; box-shadow: 0 .5px 1px rgba(0,0,0,.06); }
-  button:hover { filter: brightness(1.05); }
-  button.primary { background: AccentColor; border-color: transparent; color: AccentColorText; }
-  button.icon { padding: 4px 8px; }
-  .hint { font-size: 11px; color: GrayText; margin-left: auto; }
+  #bar { display: flex; gap: var(--sp-2); align-items: center; padding: var(--sp-3) var(--sp-4); user-select: none; }
+  #bar select { font-size: var(--f-md); padding: var(--sp-1) var(--sp-2); border: 1px solid var(--hair); border-radius: var(--r-sm); background: Field; color: FieldText; }
+  button {
+    font-size: var(--f-md); padding: var(--sp-1) var(--sp-3); border-radius: var(--r-sm);
+    background: ButtonFace; color: ButtonText;
+    border: 1px solid var(--hair); box-shadow: var(--shadow-sm); cursor: pointer;
+    transition: transform var(--t-1), background var(--t-1);
+  }
+  button:hover { background: color-mix(in srgb, ButtonFace 90%, CanvasText); }
+  button:active { transform: scale(.96); }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid AccentColor; outline-offset: 2px; }
+  button.primary { background: AccentColor; color: AccentColorText; border-color: transparent; }
+  button.primary:hover { background: color-mix(in srgb, AccentColor 88%, CanvasText); }
+  button.icon { padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; }
+  button.danger-confirm { background: #ff3b30; color: #fff; border-color: transparent; }
+  kbd {
+    font: var(--f-xs) ui-monospace, "SF Mono", monospace;
+    background: var(--fill-thick); border: 1px solid var(--hair);
+    border-radius: var(--r-xs); padding: 1px 5px; color: CanvasText;
+  }
+  .hint { display: flex; gap: var(--sp-3); align-items: center; font-size: var(--f-xs); color: GrayText; margin-left: auto; white-space: nowrap; }
+  .hint span { display: inline-flex; gap: 3px; align-items: center; }
+  #newname { display: none; font-size: var(--f-md); padding: var(--sp-1) var(--sp-2); border: 1px solid var(--hair); border-radius: var(--r-sm); background: Field; color: FieldText; width: 140px; }
 
-  #monitors { flex: 1; position: relative; padding: 4px 14px 12px; min-height: 0; }
-  .mon { background: Field; border: 1px solid rgba(120,120,128,.3); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.15); padding: 10px; display: flex; flex-direction: column; position: absolute; overflow: hidden; }
-  .monhead { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-  .monhead .nm { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .monhead .res { font-size: 11px; color: GrayText; }
-  .steppers { margin-left: auto; display: flex; gap: 8px; }
-  .stepper { display: flex; align-items: center; gap: 4px; font-size: 11px; color: GrayText; }
-  .stepper button { padding: 1px 7px; font-size: 12px; line-height: 16px; }
+  #banner { display: none; margin: 0 var(--sp-4) var(--sp-2); padding: var(--sp-1) var(--sp-3); font-size: var(--f-sm);
+    background: var(--accent-soft); border: 1px solid var(--accent-mid); border-radius: var(--r-sm);
+    align-items: center; gap: var(--sp-2); }
+  #banner button { font-size: var(--f-xs); padding: 2px var(--sp-2); }
+
+  #monitors { flex: 1; position: relative; margin: 0 var(--sp-4) var(--sp-3); padding: var(--sp-3);
+    background: var(--fill-thin); border-radius: var(--r-lg); min-height: 0; overflow: auto; scrollbar-width: thin; }
+  .mon {
+    background: Field; border-radius: var(--r-lg); box-shadow: var(--shadow-md);
+    padding: var(--sp-2) var(--sp-3) var(--sp-3); display: flex; flex-direction: column;
+    position: absolute; overflow: hidden; min-width: 240px; min-height: 130px;
+    transition: box-shadow var(--t-1);
+  }
+  .mon.primary { outline: 2px solid var(--accent-mid); outline-offset: -1px; }
+  .mon.dragging-target { outline: 2px solid color-mix(in srgb, AccentColor 45%, transparent); outline-offset: -1px; }
+  .monhead { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: nowrap; cursor: move; touch-action: none; }
+  .mon.primary .monhead { cursor: default; }
+  .monhead::before { content: "⠿"; color: GrayText; font-size: var(--f-sm); opacity: .6; flex-shrink: 0; }
+  .mon.primary .monhead::before { content: ""; }
+  .monhead .idx { font: 600 var(--f-xxs)/1 ui-monospace, monospace; background: AccentColor; color: AccentColorText; border-radius: var(--r-xs); padding: 2px 4px; flex-shrink: 0; }
+  .monhead .nm { font-size: var(--f-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .steppers { margin-left: auto; display: flex; gap: var(--sp-2); flex-shrink: 0; }
+  .stepper { display: flex; align-items: center; gap: var(--sp-1); font-size: var(--f-xs); color: GrayText; }
+  .stepper button { padding: 1px 7px; font-size: var(--f-sm); line-height: 16px; }
   .stepper .v { min-width: 12px; text-align: center; color: CanvasText; font-weight: 600; }
 
-  .grid { flex: 1; display: grid; gap: 6px; min-height: 0; }
-  .slot { background: rgba(120,120,128,.12); border: 1.5px dashed rgba(120,120,128,.45); border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 4px; position: relative; min-height: 48px; }
-  .slot.over { border-color: AccentColor; background: rgba(0,113,227,.14); }
-  .chip { width: 100%; height: 100%; border-radius: 7px; background: ButtonFace; border: 1px solid rgba(120,120,128,.35); box-shadow: 0 1px 2px rgba(0,0,0,.12); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: grab; padding: 4px; text-align: center; }
-  .chip:active { cursor: grabbing; }
-  .chip .nm { font-size: 12px; font-weight: 600; word-break: break-word; }
-  .chip .kb { font-size: 10px; color: GrayText; }
-  .chip .x { position: absolute; top: 2px; right: 5px; color: -apple-system-tertiary-label; font-size: 12px; cursor: pointer; padding: 2px 5px; }
-  .chip .x:hover { color: #ff3b30; }
-  .empty { color: GrayText; font-size: 11px; }
+  .ghost { position: absolute; border: 1.5px dashed GrayText; border-radius: var(--r-lg); background: transparent; pointer-events: none; opacity: .5; }
+  .guide { position: absolute; background: AccentColor; pointer-events: none; z-index: 20; }
+  .guide.h { height: 1px; } .guide.v { width: 1px; }
 
-  #tray { background: Canvas; border-top: 1px solid rgba(120,120,128,.35); padding: 10px 14px; max-height: 160px; overflow-y: auto; }
-  #tray input { width: 100%; border: 1px solid rgba(120,120,128,.35); border-radius: 6px; padding: 5px 9px; font-size: 12px; margin-bottom: 8px; background: Field; color: FieldText; }
-  #tray input:focus { outline: 2px solid rgba(0,113,227,.4); }
-  #chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .tchip { background: rgba(120,120,128,.12); border: 1px solid rgba(120,120,128,.35); border-radius: 12px; padding: 3px 10px; font-size: 11px; cursor: grab; color: CanvasText; }
-  .tchip:hover { border-color: AccentColor; color: AccentColor; }
+  .grid { flex: 1; display: grid; gap: var(--sp-2); min-height: 0; }
+  .slot {
+    background: var(--fill-thin); border: 1.5px dashed var(--hair); border-radius: var(--r-md);
+    display: flex; align-items: center; justify-content: center; padding: var(--sp-1);
+    position: relative; min-height: 48px;
+    transition: background var(--t-1), border-color var(--t-1), box-shadow var(--t-1);
+  }
+  .slot:not(.occupied):hover { border-style: solid; border-color: var(--accent-line); }
+  .slot:not(.occupied):hover::after { content: "+"; font-size: var(--f-lg); font-weight: 300; color: color-mix(in srgb, AccentColor 70%, CanvasText); }
+  .slot.over { border-color: AccentColor; background: var(--accent-soft); box-shadow: inset 0 0 0 1px AccentColor; }
+
+  .chip {
+    width: 100%; height: 100%; border-radius: var(--r-md); background: ButtonFace; color: ButtonText;
+    border: 1px solid var(--hair); box-shadow: var(--shadow-sm);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    cursor: grab; padding: var(--sp-1); text-align: center; position: relative;
+    transition: transform var(--t-1), box-shadow var(--t-1), opacity var(--t-1);
+  }
+  .chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .chip:active { cursor: grabbing; }
+  .chip.dragging, .tchip.dragging { opacity: .3; }
+  body.is-dragging .chip { pointer-events: none; }
+  .chip .nm { font-size: var(--f-sm); font-weight: 600; overflow-wrap: anywhere; }
+  .chip .kb { font-size: var(--f-xs); font-family: ui-monospace, "SF Mono", monospace; color: GrayText; }
+  .chip .x {
+    position: absolute; top: var(--sp-1); right: var(--sp-1); width: 20px; height: 20px;
+    display: grid; place-items: center; border-radius: 50%;
+    color: GrayText; font-size: var(--f-xs); cursor: pointer; opacity: .55;
+    transition: opacity var(--t-1), background var(--t-1), color var(--t-1);
+  }
+  .chip .x:hover { opacity: 1; background: color-mix(in srgb, #ff3b30 14%, transparent); color: #ff3b30; }
+
+  #tray { background: Canvas; border-top: 1px solid var(--hair); padding: var(--sp-3) var(--sp-4); max-height: 170px; overflow-y: auto; scrollbar-width: thin; }
+  #tray input { width: 100%; border: 1px solid var(--hair); border-radius: var(--r-sm); padding: 5px 9px; font-size: var(--f-sm); margin-bottom: var(--sp-2); background: Field; color: FieldText; }
+  #tray input:focus { outline: none; border-color: AccentColor; box-shadow: 0 0 0 3px var(--accent-mid); }
+  #chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+  .tchip {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: var(--r-sm);
+    padding: 5px 10px; font-size: var(--f-xs); cursor: grab;
+    background: Field; color: FieldText; border: 1px solid var(--hair); box-shadow: var(--shadow-sm);
+    transition: transform var(--t-1), box-shadow var(--t-1);
+  }
+  .tchip::before { content: "⠿"; color: GrayText; font-size: var(--f-xxs); line-height: 1; }
+  .tchip:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgb(0 0 0 / .12); }
+  .tchip.placed { background: transparent; border-style: dashed; color: GrayText; }
 </style>
 </head>
 <body>
   <div id="bar">
     <select id="cfg"></select>
-    <button id="new" class="icon" title="Nueva configuración">＋</button>
-    <button id="del" class="icon" title="Eliminar configuración">🗑</button>
-    <button id="apply" class="primary">Aplicar ⌘⌥0</button>
+    <button id="new" class="icon" title="Nueva configuración"><span style="font-size:15px;line-height:1">+</span></button>
+    <input id="newname" placeholder="Nombre…" />
+    <button id="del" class="icon" title="Eliminar configuración">
+      <svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+        <path d="M1 3h10M4.5 3V1.5h3V3M2.5 3l.6 9.4h5.8L9.5 3M5 5.5v4.5M7 5.5v4.5"/>
+      </svg>
+    </button>
+    <button id="apply" class="primary">Aplicar</button>
     <button id="applyClose">Aplicar y cerrar</button>
-    <span class="hint">arrastra para colocar (mueve la ventana al instante) · ⌘⌥N mueve la ventana frontal al hueco N · ⌘⌥⇧N la enfoca · Esc cierra</span>
+    <span class="hint">
+      <span>arrastra al hueco</span>
+      <span><kbd>⌘⌥</kbd><kbd>1–9</kbd> colocar</span>
+      <span><kbd>⌘⌥⇧</kbd><kbd>1–9</kbd> enfocar</span>
+      <span><kbd>esc</kbd> cerrar</span>
+    </span>
+  </div>
+  <div id="banner">
+    <span>Disposición manual — solo afecta a este mapa (las teclas usan la posición real de macOS)</span>
+    <button id="resetArr">Restablecer a la real</button>
   </div>
   <div id="monitors"></div>
   <div id="tray">
-    <input id="filter" placeholder="Apps con ventana visible — arrastra a un hueco o doble clic para colocar en el primero libre">
+    <input id="filter" placeholder="Filtrar apps…" />
     <div id="chips"></div>
   </div>
 <script>
 let S = null;
-let W = null; // copia de trabajo: Map(screen -> {cols, rows, slots:[app,...]})
+let W = null;
 
 function post(a) {
   if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.trisplit)
@@ -68,20 +176,27 @@ function post(a) {
 }
 function screens() { return S.screens; }
 function cfg() { return S.configs[S.active - 1]; }
+function isPrimary(name) { return name === S.primary; }
+function arrange() { return S.arrange || {}; }
+
+function effRect(s) {
+  const off = arrange()[s.name];
+  if (off && !isPrimary(s.name)) {
+    const p = screens().find(o => o.name === S.primary) || screens()[0];
+    return { x: p.x + (+off.dx || 0), y: p.y + (+off.dy || 0), w: s.w, h: s.h };
+  }
+  return { x: s.x, y: s.y, w: s.w, h: s.h };
+}
 
 function rebuildGroups() {
   W = new Map();
   for (const s of screens()) {
     const m = cfg().monitors[s.name];
-    if (m) {
-      W.set(s.name, { cols: m.cols, rows: m.rows, slots: m.slots.map(a => a || "") });
-    } else {
-      W.set(s.name, { cols: 3, rows: 1, slots: ["", "", ""] });
-    }
+    if (m) W.set(s.name, { cols: m.cols, rows: m.rows, slots: m.slots.map(a => a || "") });
+    else W.set(s.name, { cols: 3, rows: 1, slots: ["", "", ""] });
   }
-  for (const name of Object.keys(cfg().monitors)) {
+  for (const name of Object.keys(cfg().monitors))
     if (!W.has(name)) W.set(name, cfg().monitors[name]);
-  }
 }
 function groups() { if (!W) rebuildGroups(); return W; }
 
@@ -116,8 +231,9 @@ function setColsRows(name, dCols, dRows) {
   for (let i = 0; i < total; i++) next.push(m.slots[i] || "");
   m.cols = cols; m.rows = rows; m.slots = next;
   persist();
-  render();
 }
+
+let mapScale = 1, mapMinX = 0, mapMinY = 0;
 
 function render() {
   if (!S) return;
@@ -131,37 +247,57 @@ function render() {
   });
   sel.value = S.active - 1;
 
+  const banner = document.getElementById("banner");
+  banner.style.display = Object.keys(arrange()).length ? "flex" : "none";
+
   const mon = document.getElementById("monitors");
   mon.innerHTML = "";
+  const rects = {};
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const s of screens()) {
-    minX = Math.min(minX, s.x); minY = Math.min(minY, s.y);
-    maxX = Math.max(maxX, s.x + s.w); maxY = Math.max(maxY, s.y + s.h);
+    const r = effRect(s);
+    rects[s.name] = r;
+    minX = Math.min(minX, r.x); minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.w); maxY = Math.max(maxY, r.y + r.h);
   }
   const bw = maxX - minX || 1, bh = maxY - minY || 1;
-  const cw = mon.clientWidth - 28, ch = mon.clientHeight - 20;
+  const cs = getComputedStyle(mon);
+  const cw = mon.clientWidth - parseFloat(cs.paddingLeft) * 2;
+  const ch = mon.clientHeight - parseFloat(cs.paddingTop) * 2;
   const sc = Math.min(cw / bw, ch / bh);
+  mapScale = sc; mapMinX = minX; mapMinY = minY;
   const desk = document.createElement("div");
-  desk.style.cssText = "position:absolute;left:" + (14 + (cw - bw * sc) / 2) + "px;top:" + (4 + (ch - bh * sc) / 2) + "px;width:" + bw * sc + "px;height:" + bh * sc + "px;";
+  desk.id = "desk";
+  desk.style.cssText = "position:absolute;left:" + (parseFloat(cs.paddingLeft) + (cw - bw * sc) / 2) + "px;top:" + (parseFloat(cs.paddingTop) + (ch - bh * sc) / 2) + "px;width:" + bw * sc + "px;height:" + bh * sc + "px;";
   mon.appendChild(desk);
-  for (const s of screens()) {
+
+  screens().forEach((s, i) => {
     const m = groups().get(s.name);
+    const r = rects[s.name];
     const box = document.createElement("div");
-    box.className = "mon";
-    box.style.left = (s.x - minX) * sc + "px";
-    box.style.top = (s.y - minY) * sc + "px";
-    box.style.width = s.w * sc + "px";
-    box.style.height = s.h * sc + "px";
+    box.className = "mon" + (isPrimary(s.name) ? " primary" : "");
+    box.dataset.name = s.name;
+    box.style.left = (r.x - minX) * sc + "px";
+    box.style.top = (r.y - minY) * sc + "px";
+    box.style.width = Math.max(240, s.w * sc) + "px";
+    box.style.height = Math.max(130, s.h * sc) + "px";
 
     const head = document.createElement("div");
     head.className = "monhead";
-    head.innerHTML = '<span class="nm"></span><span class="res">' + Math.round(s.w) + "×" + Math.round(s.h) + "</span>";
-    head.querySelector(".nm").textContent = s.name;
+    head.title = isPrimary(s.name) ? "Pantalla principal — fija" : "Arrastra para reordenar la disposición del mapa";
+    if (!isPrimary(s.name)) {
+      const idx = document.createElement("span");
+      idx.className = "idx"; idx.textContent = i + 1;
+      head.appendChild(idx);
+    }
+    const nm = document.createElement("span");
+    nm.className = "nm"; nm.textContent = s.name;
+    head.appendChild(nm);
     const st = document.createElement("div");
     st.className = "steppers";
     st.innerHTML =
-      '<span class="stepper">col <button data-dc="-1">−</button><span class="v">' + m.cols + '</span><button data-dc="1">＋</button></span>' +
-      '<span class="stepper">fil <button data-dr="-1">−</button><span class="v">' + m.rows + '</span><button data-dr="1">＋</button></span>';
+      '<span class="stepper">col <button data-dc="-1">−</button><span class="v">' + m.cols + '</span><button data-dc="1">+</button></span>' +
+      '<span class="stepper">fil <button data-dr="-1">−</button><span class="v">' + m.rows + '</span><button data-dr="1">+</button></span>';
     st.querySelectorAll("button").forEach(b => b.onclick = () =>
       setColsRows(s.name, +b.dataset.dc || 0, +b.dataset.dr || 0));
     head.appendChild(st);
@@ -171,40 +307,46 @@ function render() {
     grid.className = "grid";
     grid.style.gridTemplateColumns = "repeat(" + m.cols + ", 1fr)";
     grid.style.gridTemplateRows = "repeat(" + m.rows + ", 1fr)";
-    m.slots.forEach((app, i) => {
+    m.slots.forEach((app, j) => {
       const slot = document.createElement("div");
-      slot.className = "slot";
+      slot.className = "slot" + (app ? " occupied" : "");
       if (app) {
         const chip = document.createElement("div");
         chip.className = "chip";
         chip.draggable = true;
-        chip.innerHTML = '<span class="x" title="quitar">✕</span><span class="nm"></span><span class="kb">⌘⌥' + flatIndex(s.name, i + 1) + "</span>";
+        const n = flatIndex(s.name, j + 1);
+        chip.innerHTML = '<span class="x" title="quitar">✕</span><span class="nm"></span>' + (n <= 9 ? '<span class="kb">⌘⌥' + n + "</span>" : "");
         chip.querySelector(".nm").textContent = app.replace(/#(\d+)$/, " · v$1");
-        chip.querySelector(".x").onclick = (e) => { e.stopPropagation(); m.slots[i] = ""; persist(); render(); };
+        chip.querySelector(".x").onclick = (e) => { e.stopPropagation(); m.slots[j] = ""; persist(); };
         chip.ondragstart = (e) => {
-          e.dataTransfer.setData("text/plain", JSON.stringify({ app, screen: s.name, idx: i + 1 }));
+          e.dataTransfer.setData("text/plain", JSON.stringify({ app, screen: s.name, idx: j + 1 }));
           e.dataTransfer.effectAllowed = "move";
+          chip.classList.add("dragging");
+          document.body.classList.add("is-dragging");
+        };
+        chip.ondragend = () => {
+          chip.classList.remove("dragging");
+          document.body.classList.remove("is-dragging");
         };
         slot.appendChild(chip);
-      } else {
-        slot.innerHTML = '<span class="empty">vacío</span>';
       }
       slot.ondragover = (e) => { e.preventDefault(); slot.classList.add("over"); };
       slot.ondragleave = () => slot.classList.remove("over");
       slot.ondrop = (e) => {
         e.preventDefault();
         slot.classList.remove("over");
+        document.body.classList.remove("is-dragging");
         let p; try { p = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
         const tgt = groups().get(s.name);
         if (p.tray) {
-          tgt.slots[i] = p.app;
-          post({ action: "liveMove", screen: s.name, idx: i + 1, app: p.app });
+          tgt.slots[j] = p.app;
+          post({ action: "liveMove", screen: s.name, idx: j + 1, app: p.app });
         } else {
           const src = groups().get(p.screen);
-          const tmp = tgt.slots[i];
-          tgt.slots[i] = src.slots[p.idx - 1];
+          const tmp = tgt.slots[j];
+          tgt.slots[j] = src.slots[p.idx - 1];
           src.slots[p.idx - 1] = tmp;
-          if (tgt.slots[i]) post({ action: "liveMove", screen: s.name, idx: i + 1, app: tgt.slots[i] });
+          if (tgt.slots[j]) post({ action: "liveMove", screen: s.name, idx: j + 1, app: tgt.slots[j] });
           if (src.slots[p.idx - 1]) post({ action: "liveMove", screen: p.screen, idx: p.idx, app: src.slots[p.idx - 1] });
         }
         persist();
@@ -213,8 +355,109 @@ function render() {
     });
     box.appendChild(grid);
     desk.appendChild(box);
-  }
+
+    if (!isPrimary(s.name)) head.onpointerdown = (e) => startArrangeDrag(e, s, box);
+  });
   renderChips();
+}
+
+function startArrangeDrag(e, s, box) {
+  if (e.target.closest("button")) return;
+  e.preventDefault();
+  const desk = document.getElementById("desk");
+  const sc = mapScale;
+  const p = screens().find(o => o.name === S.primary) || screens()[0];
+  const start = effRect(s);
+  const neighbors = screens().filter(o => o.name !== s.name).map(o => effRect(o));
+  const ghost = document.createElement("div");
+  ghost.className = "ghost";
+  ghost.style.cssText = "left:" + box.style.left + ";top:" + box.style.top + ";width:" + box.style.width + ";height:" + box.style.height + ";";
+  desk.appendChild(ghost);
+  box.classList.add("lifted");
+  box.style.boxShadow = "var(--shadow-pop)";
+  box.style.zIndex = 10;
+  const sx = e.clientX, sy = e.clientY, ox = box.offsetLeft, oy = box.offsetTop;
+  const guides = [];
+  try { box.setPointerCapture(e.pointerId); } catch {}
+
+  function clearGuides() { guides.forEach(g => g.remove()); guides.length = 0; }
+  function guideV(x, y0, y1) {
+    const g = document.createElement("div"); g.className = "guide v";
+    g.style.cssText = "left:" + x + "px;top:" + y0 + "px;height:" + (y1 - y0) + "px;";
+    desk.appendChild(g); guides.push(g);
+  }
+  function guideH(y, x0, x1) {
+    const g = document.createElement("div"); g.className = "guide h";
+    g.style.cssText = "top:" + y + "px;left:" + x0 + "px;width:" + (x1 - x0) + "px;";
+    desk.appendChild(g); guides.push(g);
+  }
+
+  box.onpointermove = (ev) => {
+    let rx = start.x + (ev.clientX - sx) / sc;
+    let ry = start.y + (ev.clientY - sy) / sc;
+    const rect = { x: rx, y: ry, w: s.w, h: s.h };
+    const T = 6;
+    clearGuides();
+    document.querySelectorAll(".mon.dragging-target").forEach(b => b.classList.remove("dragging-target"));
+    let snappedX = false, snappedY = false;
+    for (const n of neighbors) {
+      const nRect = { x: n.x, y: n.y, w: n.w, h: n.h };
+      const pairsX = [
+        [rect.x, nRect.x], [rect.x + rect.w, nRect.x + nRect.w],
+        [rect.x + rect.w / 2, nRect.x + nRect.w / 2],
+      ];
+      for (const [a, b] of pairsX) {
+        if (Math.abs(a - b) <= T) { rx += b - a; snappedX = true; }
+      }
+      const pairsY = [
+        [rect.y, nRect.y], [rect.y + rect.h, nRect.y + nRect.h],
+        [rect.y + rect.h / 2, nRect.y + nRect.h / 2],
+      ];
+      for (const [a, b] of pairsY) {
+        if (Math.abs(a - b) <= T) { ry += b - a; snappedY = true; }
+      }
+    }
+    if (snappedX) {
+      const gx = (rx - mapMinX) * sc;
+      let y0 = Infinity, y1 = -Infinity;
+      for (const n of neighbors) { y0 = Math.min(y0, (n.y - mapMinY) * sc); y1 = Math.max(y1, (n.y + n.h - mapMinY) * sc); }
+      guideV(gx, y0, y1 - y0);
+    } else {
+      rx = Math.round(rx / 16) * 16;
+    }
+    if (snappedY) {
+      const gy = (ry - mapMinY) * sc;
+      let x0 = Infinity, x1 = -Infinity;
+      for (const n of neighbors) { x0 = Math.min(x0, (n.x - mapMinX) * sc); x1 = Math.max(x1, (n.x + n.w - mapMinX) * sc); }
+      guideH(gy, x0, x1 - x0);
+    } else {
+      ry = Math.round(ry / 16) * 16;
+    }
+    for (const n of neighbors) {
+      if (rx < n.x + n.w && rx + s.w > n.x && ry < n.y + n.h && ry + s.h > n.y) {
+        const ox = Math.min(rx + s.w - n.x, n.x + n.w - rx);
+        const oy = Math.min(ry + s.h - n.y, n.y + n.h - ry);
+        if (ox < oy) rx += (rx + s.w / 2 < n.x + n.w / 2) ? -ox : ox;
+        else ry += (ry + s.h / 2 < n.y + n.h / 2) ? -oy : oy;
+      }
+    }
+    box.style.left = (rx - mapMinX) * sc + "px";
+    box.style.top = (ry - mapMinY) * sc + "px";
+    box.dataset.rx = rx; box.dataset.ry = ry;
+  };
+  box.onpointerup = () => {
+    clearGuides();
+    ghost.remove();
+    box.classList.remove("lifted");
+    box.style.boxShadow = "";
+    box.style.zIndex = "";
+    box.onpointermove = null; box.onpointerup = null; box.onpointercancel = box.onpointerup;
+    const rx = +box.dataset.rx, ry = +box.dataset.ry;
+    if (!S.arrange || Array.isArray(S.arrange)) S.arrange = {};
+    S.arrange[s.name] = { dx: Math.round(rx - p.x), dy: Math.round(ry - p.y) };
+    post({ action: "arrange", offsets: S.arrange });
+    render();
+  };
 }
 
 function placeInFirstFree(spec) {
@@ -252,10 +495,16 @@ function renderChips() {
       }
       c.textContent = label;
       c.draggable = true;
-      if (used.has(app.name)) c.style.opacity = .45;
+      if (used.has(app.name)) c.classList.add("placed");
       c.ondragstart = (e) => {
         e.dataTransfer.setData("text/plain", JSON.stringify({ app: spec, tray: true }));
         e.dataTransfer.effectAllowed = "copy";
+        c.classList.add("dragging");
+        document.body.classList.add("is-dragging");
+      };
+      c.ondragend = () => {
+        c.classList.remove("dragging");
+        document.body.classList.remove("is-dragging");
       };
       c.ondblclick = () => placeInFirstFree(spec);
       box.appendChild(c);
@@ -265,20 +514,38 @@ function renderChips() {
 
 document.getElementById("filter").oninput = renderChips;
 document.getElementById("cfg").onchange = (e) => { S.active = +e.target.value + 1; W = null; post({ action: "save", configs: S.configs, active: S.active }); render(); };
-document.getElementById("new").onclick = () => {
-  const name = prompt("Nombre de la configuración:");
-  if (!name) return;
-  const monitors = {};
-  for (const s of screens()) monitors[s.name] = { cols: 3, rows: 1, slots: ["", "", ""] };
-  S.configs.push({ name, monitors });
-  S.active = S.configs.length;
-  W = null;
-  post({ action: "save", configs: S.configs, active: S.active });
-  render();
+const newBtn = document.getElementById("new");
+const newName = document.getElementById("newname");
+newBtn.onclick = () => { newName.style.display = ""; newName.value = ""; newName.focus(); };
+newName.onkeydown = (e) => {
+  if (e.key === "Enter" && newName.value.trim()) {
+    const monitors = {};
+    for (const s of screens()) monitors[s.name] = { cols: 3, rows: 1, slots: ["", "", ""] };
+    S.configs.push({ name: newName.value.trim(), monitors });
+    S.active = S.configs.length;
+    W = null;
+    post({ action: "save", configs: S.configs, active: S.active });
+    newName.style.display = "none";
+    render();
+  }
+  if (e.key === "Escape") newName.style.display = "none";
 };
-document.getElementById("del").onclick = () => {
-  if (S.configs.length <= 1) return alert("Debe quedar al menos una configuración.");
-  if (!confirm('Eliminar "' + cfg().name + '"?')) return;
+const delBtn = document.getElementById("del");
+let delArmed = false;
+delBtn.onclick = () => {
+  if (S.configs.length <= 1) return;
+  if (!delArmed) {
+    delArmed = true;
+    delBtn.classList.add("danger-confirm");
+    delBtn.title = 'Pulsa de nuevo para eliminar "' + cfg().name + '"';
+    delBtn.innerHTML = "¿Seguro?";
+    setTimeout(() => {
+      delArmed = false; delBtn.classList.remove("danger-confirm");
+      delBtn.title = "Eliminar configuración";
+      delBtn.innerHTML = '<svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M1 3h10M4.5 3V1.5h3V3M2.5 3l.6 9.4h5.8L9.5 3M5 5.5v4.5M7 5.5v4.5"/></svg>';
+    }, 2500);
+    return;
+  }
   S.configs.splice(S.active - 1, 1);
   S.active = Math.min(S.active, S.configs.length);
   W = null;
@@ -287,6 +554,11 @@ document.getElementById("del").onclick = () => {
 };
 document.getElementById("apply").onclick = () => post({ action: "apply" });
 document.getElementById("applyClose").onclick = () => post({ action: "applyAndClose" });
+document.getElementById("resetArr").onclick = () => {
+  S.arrange = {};
+  post({ action: "arrange", offsets: {} });
+  render();
+};
 
 window.trisplitSetState = (s) => { S = s; W = null; render(); };
 document.addEventListener("DOMContentLoaded", () => post({ action: "ready" }));
