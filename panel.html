@@ -528,7 +528,7 @@ document.getElementById("filter").oninput = renderChips;
 document.getElementById("cfg").onchange = (e) => { S.active = +e.target.value + 1; W = null; post({ action: "save", configs: S.configs, active: S.active }); render(); };
 const newBtn = document.getElementById("new");
 const newName = document.getElementById("newname");
-newBtn.onclick = () => { newName.style.display = ""; newName.value = ""; newName.focus(); };
+newBtn.onclick = () => { newName.style.display = "inline-block"; newName.value = ""; newName.focus(); };
 newName.onkeydown = (e) => {
   if (e.key === "Enter" && newName.value.trim()) {
     const monitors = {};
@@ -540,8 +540,7 @@ newName.onkeydown = (e) => {
     newName.style.display = "none";
     render();
   }
-  if (e.key === "Escape") newName.style.display = "none";
-};
+  if (e.key === "Escape") newName.style.display = "none";};
 const delBtn = document.getElementById("del");
 let delArmed = false;
 delBtn.onclick = () => {
