@@ -1,79 +1,301 @@
+// Self-contained panel.html tests; run with build/panel_runner panel.html tests/panel_tests.js
 (function () {
- try {
-  let pass = 0;
-  const fails = [];
-  const A = (name, cond) => { if (cond) pass++; else fails.push(name); };
+  const report = (m) => webkit.messageHandlers.trisplitTest.postMessage(m);
+  const LRM = "‎";
+  const ODY = LRM + "Odyssey G95C";
+  const XSS = "<img src=x onerror=alert(1)>";
 
-  const firstScreen = S.screens[0].name;
-  const slotsOf = () => groups().get(firstScreen).slots;
+  let log = [];
+  window.post = (m) => { log.push(JSON.parse(JSON.stringify(m))); };
 
-  const slotEls = () => Array.from(document.querySelectorAll("#desk .slot"));
-  const drag = (srcEl, dstEl, dt) => {
-    srcEl.dispatchEvent(new DragEvent("dragstart", { dataTransfer: dt, bubbles: true }));
-    dstEl.dispatchEvent(new DragEvent("dragover", { dataTransfer: dt, bubbles: true }));
-    dstEl.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true }));
-    srcEl.dispatchEvent(new DragEvent("dragend", { dataTransfer: dt, bubbles: true }));
+  const FIXTURE = {
+    screens: [
+      { name: "LC49G95T", x: 0, y: 0, w: 5120, h: 1440 },
+      { name: ODY, x: 5120, y: 0, w: 5120, h: 1440 },
+      { name: "Built-in Retina Display", x: 1000, y: 1440, w: 1512, h: 982 },
+    ],
+    configs: [{
+      name: "Trabajo <b>x</b>",
+      monitors: {
+        "LC49G95T": { cols: 3, rows: 1, slots: ["Code#2", "", LRM + "WhatsApp"] },
+        [ODY]: { cols: 2, rows: 1, slots: ["Safari", ""] },
+        "Built-in Retina Display": { cols: 1, rows: 1, slots: [""] },
+      },
+    }],
+    active: 1,
+    apps: [
+      { name: "Code", count: 2, titles: ["main.swift", XSS] },
+      { name: "Safari", count: 1, titles: ["x"] },
+      { name: LRM + "WhatsApp", count: 1, titles: [""] },
+      { name: "<i>Evil</i>", count: 1, titles: ["t"] },
+      { name: "Slack", count: 1, titles: [""] },
+    ],
+    primary: "LC49G95T",
+    arrange: {},
+    hasDisplayplacer: false,
   };
 
-  // ---- T1: chip drag swaps slots ----
-  A("T1 setup slots[0]=Finder#1", slotsOf()[0] === "Finder#1");
-  const chip = slotEls()[0].querySelector(".chip");
-  A("T1 chip rendered", chip !== null);
-  drag(chip, slotEls()[1], new DataTransfer());
-  A("T1 target filled", slotsOf()[1] === "Finder#1");
-  A("T1 source emptied", slotsOf()[0] === "");
+  function fresh(mut) {
+    const s = JSON.parse(JSON.stringify(FIXTURE));
+    if (mut) mut(s);
+    window.trisplitSetState(s);
+    log = [];
+    return s;
+  }
+  const byAction = (a) => log.filter((m) => m.action === a);
+  const monBox = (name) => [...document.querySelectorAll(".mon")].find((b) => b.dataset.name === name);
+  const tchips = () => [...document.querySelectorAll("#chips .tchip")];
+  function slotOf(name, idx) { return monBox(name).querySelectorAll(".slot")[idx - 1]; }
+  function drop(slot, payload) {
+    slot.ondrop({ preventDefault() {}, dataTransfer: { getData: () => JSON.stringify(payload) } });
+  }
+  function ptr(el, type, x, y) {
+    el.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerId: 7, bubbles: true, cancelable: true }));
+  }
+  function esc(target) {
+    (target || document).dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  }
+  function assert(c, msg) { if (!c) throw new Error(msg); }
+  function eq(a, b, msg) { if (a !== b) throw new Error(msg + ": expected " + JSON.stringify(b) + ", got " + JSON.stringify(a)); }
 
-  // ---- T2: X removes chip ----
-  slotEls()[1].querySelector(".x").click();
-  A("T2 slot emptied by X", slotsOf()[1] === "");
+  let pass = 0, fail = 0;
+  function test(name, fn) {
+    try { fn(); pass++; report("ok - " + name); }
+    catch (e) { fail++; report("not ok - " + name + ": " + (e && e.message)); }
+    finally { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }
+  }
 
-  // ---- T3: tray drag fills empty slot ----
-  const trayChip = Array.from(document.querySelectorAll("#chips .tchip"))
-    .find((c) => c.textContent.indexOf("Finder") === 0);
-  A("T3 Finder in tray", trayChip !== undefined);
-  const dt3 = new DataTransfer();
-  dt3.setData("text/plain", JSON.stringify({ app: "Finder", tray: true }));
-  drag(trayChip, slotEls()[0], dt3);
-  A("T3 tray drop fills slot", slotsOf()[0] === "Finder");
-
-  // ---- T4: cols stepper grows grid ----
-  const box = document.querySelector("#desk .mon");
-  const before = groups().get(firstScreen).cols;
-  box.querySelector('[data-dc="1"]').click();
-  A("T4 cols incremented", groups().get(firstScreen).cols === before + 1);
-  A("T4 slots grew", groups().get(firstScreen).slots.length === (before + 1) * groups().get(firstScreen).rows);
-
-  // ---- T5: + creates a new config ----
-  const nCfgs = S.configs.length;
-  document.getElementById("new").click();
-  const inp = document.getElementById("newname");
-  A("T5 input visible", inp.offsetParent !== null);
-  inp.value = "JSTest";
-  inp.onkeydown({ key: "Enter" });
-  A("T5 config added", S.configs.length === nCfgs + 1);
-  A("T5 config active", S.configs[S.active - 1].name === "JSTest");
-  A("T5 input hidden", document.getElementById("newname").offsetParent === null);
-
-  // ---- T6: arrange [] from Lua normalizes to {} ----
-  trisplitSetState({
-    screens: S.screens, configs: S.configs, active: S.active,
-    apps: S.apps, primary: S.primary, arrange: [], hasDisplayplacer: S.hasDisplayplacer,
+  test("ready is posted on DOMContentLoaded via post()", () => {
+    log = [];
+    document.dispatchEvent(new Event("DOMContentLoaded"));
+    eq(byAction("ready").length, 1, "ready count");
   });
-  A("T6 [] normalized to object", typeof S.arrange === "object" && !Array.isArray(S.arrange));
 
-  // ---- T7: monitor box drag records offset ----
-  const mon = document.querySelector("#desk .mon:not(.primary)") || document.querySelector("#desk .mon");
-  const monName = mon.querySelector(".monhead .nm").textContent;
-  const r = mon.getBoundingClientRect();
-  const pid = 1;
-  mon.dispatchEvent(new PointerEvent("pointerdown", { clientX: r.x + r.width / 2, clientY: r.y + 8, pointerId: pid, bubbles: true }));
-  mon.dispatchEvent(new PointerEvent("pointermove", { clientX: r.x + r.width / 2 + 80, clientY: r.y + 8, pointerId: pid, bubbles: true }));
-  mon.dispatchEvent(new PointerEvent("pointerup", { clientX: r.x + r.width / 2 + 80, clientY: r.y + 8, pointerId: pid, bubbles: true }));
-  const off = S.arrange[monName];
-  A("T7 arrange offset recorded", off && (off.dx !== 0 || off.dy !== 0));
+  test("post() is the single bridge entry point", () => {
+    const src = document.querySelector("script:not([src])").textContent;
+    eq((src.match(/postMessage/g) || []).length, 1, "postMessage occurrences in panel script");
+  });
 
-  return "panel-js: " + pass + " passed, " + fails.length + " failed" + (fails.length ? "\n  - " + fails.join("\n  - ") : "");
- } catch (e) {
-  return "JS-EXCEPTION: " + e.message + " @" + (e.stack || "").split("\n")[1];
- }
-})()
+  test("renders configs", () => {
+    fresh((s) => s.configs.push({ name: "Casa", monitors: {} }));
+    const opts = [...document.querySelectorAll("#cfg option")].map((o) => o.textContent);
+    eq(JSON.stringify(opts), JSON.stringify(["Trabajo <b>x</b>", "Casa"]), "option texts");
+    eq(document.querySelectorAll("#cfg b").length, 0, "no <b> element from config name");
+  });
+
+  test("renders screens with U+200E names intact", () => {
+    fresh();
+    const names = [...document.querySelectorAll(".mon")].map((b) => b.dataset.name);
+    eq(names.length, 3, "monitor count");
+    assert(names.includes(ODY), "LRM-prefixed screen name present");
+    eq(monBox(ODY).querySelector(".monhead .nm").textContent, ODY, "screen label");
+    eq(monBox(ODY).querySelectorAll(".slot").length, 2, "Odyssey slots");
+    eq(slotOf("LC49G95T", 3).querySelector(".chip .nm").textContent, LRM + "WhatsApp", "LRM app chip");
+  });
+
+  test("renders apps in tray (one chip per window)", () => {
+    fresh();
+    eq(tchips().length, 6, "tray chip count");
+  });
+
+  test("XSS strings render as text, no elements injected", () => {
+    fresh();
+    eq(document.querySelectorAll("img").length, 0, "img elements");
+    eq(document.querySelectorAll("#chips i, #monitors b, #monitors i").length, 0, "injected tags");
+    assert(tchips().some((c) => c.textContent.includes("<img src=x")), "title shown literally");
+    assert(tchips().some((c) => c.textContent === "<i>Evil</i>"), "app name shown literally");
+  });
+
+  test("tray drop into slot posts liveMove + save with correct screen/idx/app", () => {
+    fresh();
+    drop(slotOf(ODY, 2), { app: "Slack", tray: true });
+    const lm = byAction("liveMove"), sv = byAction("save");
+    eq(lm.length, 1, "liveMove count");
+    eq(JSON.stringify(lm[0]), JSON.stringify({ action: "liveMove", screen: ODY, idx: 2, app: "Slack" }), "liveMove payload");
+    eq(sv.length, 1, "save count");
+    eq(sv[0].active, 1, "save active");
+    eq(sv[0].configs[0].monitors[ODY].slots[1], "Slack", "saved slot");
+  });
+
+  test("chip drag between screens swaps and posts liveMove for both", () => {
+    fresh();
+    drop(slotOf(ODY, 1), { app: "Code#2", screen: "LC49G95T", idx: 1 });
+    const lm = byAction("liveMove");
+    eq(lm.length, 2, "liveMove count");
+    eq(JSON.stringify(lm[0]), JSON.stringify({ action: "liveMove", screen: ODY, idx: 1, app: "Code#2" }), "first move");
+    eq(JSON.stringify(lm[1]), JSON.stringify({ action: "liveMove", screen: "LC49G95T", idx: 1, app: "Safari" }), "second move");
+    eq(byAction("save").length, 1, "save count");
+  });
+
+  test("placed flag is keyed by full spec (Code vs Code#2, App == App#1)", () => {
+    fresh((s) => { s.configs[0].monitors[ODY].slots = ["Safari#1", ""]; });
+    const flag = (label) => tchips().find((c) => c.textContent.startsWith(label)).classList.contains("placed");
+    eq(flag("Code · ventana 1"), false, "Code v1 placed");
+    eq(flag("Code · ventana 2"), true, "Code v2 placed");
+    eq(flag("Safari"), true, "Safari placed via Safari#1");
+    eq(flag("Slack"), false, "Slack placed");
+    eq(flag(LRM + "WhatsApp"), true, "LRM WhatsApp placed");
+  });
+
+  test("Esc posts close", () => {
+    fresh();
+    esc();
+    eq(JSON.stringify(log), JSON.stringify([{ action: "close" }]), "messages");
+  });
+
+  test("Esc while editing new-config name cancels edit, no close", () => {
+    fresh();
+    document.getElementById("new").click();
+    const inp = document.getElementById("newname");
+    inp.value = "draft";
+    assert(document.activeElement === inp, "input focused");
+    esc(inp);
+    eq(byAction("close").length, 0, "close count");
+    eq(inp.style.display, "none", "input hidden");
+    esc();
+    eq(byAction("close").length, 1, "close after edit cancelled");
+  });
+
+  test("delete disabled with one config, enabled with two", () => {
+    fresh();
+    const del = document.getElementById("del");
+    eq(del.disabled, true, "disabled with 1");
+    assert(del.title.length > 0, "tooltip present");
+    del.click();
+    eq(log.length, 0, "no message when disabled");
+    fresh((s) => s.configs.push({ name: "Casa", monitors: {} }));
+    eq(del.disabled, false, "enabled with 2");
+    del.click(); del.click();
+    eq(byAction("save").length, 1, "delete saves");
+    eq(byAction("save")[0].configs.length, 1, "one config left");
+    eq(del.disabled, true, "disabled again");
+  });
+
+  test("arrange click without move posts nothing (no NaN)", () => {
+    fresh();
+    const box = monBox(ODY);
+    ptr(box, "pointerdown", 400, 200);
+    ptr(box, "pointermove", 400, 200);
+    ptr(monBox(ODY), "pointerup", 400, 200);
+    eq(byAction("arrange").length, 0, "arrange posts");
+    assert(!JSON.stringify(log).includes("null"), "no NaN-as-null in any message");
+    eq(document.querySelectorAll(".ghost, .guide").length, 0, "drag artifacts left");
+  });
+
+  test("arrange drag posts finite offsets once; listeners removed after pointerup", () => {
+    fresh();
+    const box = monBox(ODY);
+    ptr(box, "pointerdown", 400, 200);
+    ptr(box, "pointermove", 460, 230);
+    ptr(box, "pointerup", 460, 230);
+    const a = byAction("arrange");
+    eq(a.length, 1, "arrange count");
+    const o = a[0].offsets[ODY];
+    assert(o && Number.isFinite(o.dx) && Number.isFinite(o.dy), "finite offsets: " + JSON.stringify(a[0].offsets));
+    ptr(box, "pointermove", 600, 300);
+    ptr(box, "pointerup", 600, 300);
+    eq(byAction("arrange").length, 1, "stale listener posted again");
+    eq(document.querySelectorAll(".ghost, .guide, .mon.lifted").length, 0, "drag artifacts left");
+  });
+
+  test("pointercancel ends arrange drag without posting", () => {
+    fresh();
+    const box = monBox(ODY);
+    ptr(box, "pointerdown", 400, 200);
+    ptr(box, "pointermove", 480, 260);
+    ptr(box, "pointercancel", 480, 260);
+    eq(byAction("arrange").length, 0, "arrange posts");
+    eq(document.querySelectorAll(".ghost, .guide, .mon.lifted").length, 0, "drag artifacts left");
+    ptr(box, "pointerup", 480, 260);
+    eq(byAction("arrange").length, 0, "listener survived cancel");
+  });
+
+  test("primary monitor header uses the move cursor like the others", () => {
+    fresh();
+    const cur = (n) => getComputedStyle(monBox(n).querySelector(".monhead")).cursor;
+    eq(cur("LC49G95T"), cur(ODY), "primary vs secondary cursor");
+  });
+
+  test("repeated setState does not duplicate handlers", () => {
+    fresh(); fresh(); fresh();
+    document.getElementById("apply").click();
+    eq(JSON.stringify(log), JSON.stringify([{ action: "apply" }]), "apply click");
+    log = [];
+    esc();
+    eq(byAction("close").length, 1, "Esc close count");
+    log = [];
+    drop(slotOf(ODY, 2), { app: "Slack", tray: true });
+    eq(byAction("liveMove").length, 1, "liveMove count");
+    eq(byAction("save").length, 1, "save count");
+  });
+
+  test("H: window index labelled 'ventana N' in chip and tray", () => {
+    fresh();
+    eq(slotOf("LC49G95T", 1).querySelector(".chip .nm").textContent, "Code · ventana 2", "chip label");
+    assert(tchips().some((c) => c.textContent.startsWith("Code · ventana 1")), "tray label");
+    assert(!document.body.textContent.includes(" · v2"), "no legacy ' · v2'");
+  });
+
+  test("B: empty tray shows filter message or no-apps message", () => {
+    fresh();
+    const f = document.getElementById("filter");
+    f.value = "zzzNope"; f.oninput();
+    const e1 = document.querySelector("#chips .empty");
+    assert(e1, "empty element (filter)");
+    eq(e1.textContent, 'Sin resultados para "zzzNope"', "filter message");
+    f.value = "";
+    fresh((s) => { s.apps = []; });
+    eq(document.querySelector("#chips .empty").textContent, "No hay apps con ventanas visibles", "no-apps message");
+    fresh();
+    eq(document.querySelectorAll("#chips .empty").length, 0, "no message with apps");
+  });
+
+  test("C: banner reports disconnected monitors of the config", () => {
+    fresh();
+    eq(getComputedStyle(document.getElementById("banner")).display, "none", "banner hidden when all connected");
+    fresh((s) => { s.configs[0].monitors["Dell U2720"] = { cols: 2, rows: 1, slots: ["Mail", ""] }; });
+    eq(document.getElementById("banner").style.display, "flex", "banner shown");
+    eq(document.getElementById("monLine").textContent.trim(),
+      "1 monitor(es) de esta configuración no están conectados — sus huecos se conservan", "banner text");
+  });
+
+  test("A: axTrusted false shows banner with Abrir Ajustes posting openAXSettings", () => {
+    fresh();
+    eq(document.getElementById("axLine").style.display, "none", "hidden when axTrusted absent");
+    fresh((s) => { s.axTrusted = false; });
+    eq(document.getElementById("banner").style.display, "flex", "banner shown");
+    const line = document.getElementById("axLine");
+    eq(line.style.display, "flex", "ax line shown");
+    assert(line.textContent.includes("Trisplit necesita permiso de Accesibilidad para mover ventanas"), "ax text");
+    const btn = document.getElementById("openAX");
+    eq(btn.textContent, "Abrir Ajustes…", "button label");
+    btn.click();
+    eq(JSON.stringify(log), JSON.stringify([{ action: "openAXSettings" }]), "openAX message");
+  });
+
+  test("D/E/F: keyboard a11y, stepper limits, cmd-enter", () => {
+    fresh();
+    const chip = slotOf("LC49G95T", 1).querySelector(".chip");
+    eq(chip.tabIndex, 0, "chip focusable");
+    const x = chip.querySelector(".x");
+    eq(x.tagName, "BUTTON", "x is a button"); eq(x.title, "Quitar", "x title");
+    chip.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true, cancelable: true }));
+    eq(byAction("save")[0].configs[0].monitors["LC49G95T"].slots[0], "", "Delete removes chip");
+    fresh();
+    tchips().find((c) => c.textContent === "Slack").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    eq(JSON.stringify(byAction("liveMove")[0]), JSON.stringify({ action: "liveMove", screen: "LC49G95T", idx: 2, app: "Slack" }), "Enter places in first free");
+    fresh();
+    const btns = monBox("Built-in Retina Display").querySelectorAll(".stepper button");
+    eq(btns[0].disabled, true, "col minus disabled at 1"); eq(btns[2].disabled, true, "row minus disabled at 1");
+    assert(btns[1].title && btns[1].getAttribute("aria-label"), "stepper title/aria");
+    fresh((s) => { s.configs[0].monitors[ODY] = { cols: 6, rows: 4, slots: Array(24).fill("") }; });
+    const b2 = monBox(ODY).querySelectorAll(".stepper button");
+    eq(b2[1].disabled, true, "col plus disabled at 6"); eq(b2[3].disabled, true, "row plus disabled at 4");
+    fresh();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true, cancelable: true }));
+    eq(JSON.stringify(log), JSON.stringify([{ action: "applyAndClose" }]), "cmd-enter");
+    assert(document.getElementById("apply").title.includes("⌘↩"), "apply title mentions ⌘↩");
+  });
+
+  report("panel: " + pass + " passed, " + fail + " failed");
+})();
