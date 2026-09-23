@@ -1,130 +1,83 @@
-import Cocoa
-import WebKit
+// Trisplit entry point: CLI self-checks, otherwise the menu bar app.
+import AppKit
+import ApplicationServices
+import ServiceManagement
 
-let repoDir = ("~/Documents/ClaudecodeTools/trisplit" as NSString).expandingTildeInPath
-let hsBin = FileManager.default.isExecutableFile(atPath: "/opt/homebrew/bin/hs")
-  ? "/opt/homebrew/bin/hs" : "/usr/local/bin/hs"
+let args = CommandLine.arguments
 
-func runHS(_ code: String, _ completion: ((String?) -> Void)? = nil) {
-  DispatchQueue.global().async {
-    let p = Process()
-    p.executableURL = URL(fileURLWithPath: hsBin)
-    p.arguments = ["-c", code]
-    let out = Pipe()
-    p.standardOutput = out
-    p.standardError = FileHandle.nullDevice
-    do { try p.run() } catch { DispatchQueue.main.async { completion?(nil) }; return }
-    let data = out.fileHandleForReading.readDataToEndOfFile()
-    p.waitUntilExit()
-    let text = String(data: data, encoding: .utf8)?
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    DispatchQueue.main.async { completion?(text) }
-  }
+if let i = args.firstIndex(of: "--login-item") {
+    // Login item CLI: on|off|status via SMAppService.mainApp, no UI.
+    let svc = SMAppService.mainApp
+    func statusName(_ s: SMAppService.Status) -> String {
+        switch s {
+        case .enabled: return "enabled"
+        case .notRegistered: return "notRegistered"
+        case .requiresApproval: return "requiresApproval"
+        case .notFound: return "notFound"
+        @unknown default: return "unknown(\(s.rawValue))"
+        }
+    }
+    let mode = i + 1 < args.count ? args[i + 1] : ""
+    do {
+        switch mode {
+        case "on": try svc.register()
+        case "off": try svc.unregister()
+        case "status": break
+        default:
+            FileHandle.standardError.write("usage: Trisplit --login-item on|off|status\n".data(using: .utf8)!)
+            exit(2)
+        }
+    } catch {
+        FileHandle.standardError.write("login item \(mode) failed: \(error.localizedDescription)\n".data(using: .utf8)!)
+        print("login item: \(statusName(svc.status))")
+        exit(1)
+    }
+    print("login item: \(statusName(svc.status))")
+    exit(0)
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler, WKNavigationDelegate {
-  var window: NSWindow!
-  var webview: WKWebView!
-  var saveTimer: Timer?
-  var stateTimer: Timer?
-  var lastStateDate: Date?
-  var lastStateJSON = ""
-  let stateFile = ("~/.hammerspoon/.trisplit_panel_state.json" as NSString).expandingTildeInPath
+if args.contains("--selftest") {
+    print(engineSmokeReport())
+    exit(0)
+}
 
-  func applicationDidFinishLaunching(_ note: Notification) {
-    NSApp.setActivationPolicy(.accessory)
-
-    window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 1100, height: 680),
-      styleMask: [.titled, .closable, .miniaturizable, .resizable],
-      backing: .buffered, defer: false)
-    window.title = "Trisplit"
-    window.isReleasedWhenClosed = false
-    window.center()
-
-    let config = WKWebViewConfiguration()
-    config.userContentController.add(self, name: "trisplit")
-    webview = WKWebView(frame: window.contentLayoutRect, configuration: config)
-    webview.autoresizingMask = [.width, .height]
-    webview.navigationDelegate = self
-    window.contentView = webview
-
-    let html = URL(fileURLWithPath: repoDir + "/panel.html")
-    webview.loadFileURL(html, allowingReadAccessTo: URL(fileURLWithPath: repoDir))
-
-    window.makeKeyAndOrderFront(nil)
-    NSApp.activate(ignoringOtherApps: true)
-
-    stateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-      self.checkStateFile()
+if args.contains("--selftest-live") {
+    // Hermetic: without TRISPLIT_STATE, load a scratch copy so the real state is never written.
+    var env = ProcessInfo.processInfo.environment
+    if (env["TRISPLIT_STATE"] ?? "").isEmpty {
+        let home = NSHomeDirectory()
+        let dir = NSTemporaryDirectory() + "trisplit-live-\(getpid())"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let copy = dir + "/trisplit.json"
+        for src in [defaultStatePath(home: home), legacyStatePath(home: home)]
+        where FileManager.default.fileExists(atPath: src) {
+            try? FileManager.default.copyItem(atPath: src, toPath: copy)
+            break
+        }
+        env["TRISPLIT_STATE"] = copy
     }
-  }
-
-  func checkStateFile() {
-    guard let attrs = try? FileManager.default.attributesOfItem(atPath: stateFile),
-          let mtime = attrs[.modificationDate] as? Date else { return }
-    if lastStateDate == mtime { return }
-    lastStateDate = mtime
-    guard let str = try? String(contentsOfFile: stateFile, encoding: .utf8),
-          str.hasPrefix("{"), str != lastStateJSON else { return }
-    lastStateJSON = str
-    webview.evaluateJavaScript("trisplitSetState(\(str))")
-  }
-
-  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-    showAndRefresh()
-    return true
-  }
-
-  func showAndRefresh() {
-    window.makeKeyAndOrderFront(nil)
-    NSApp.activate(ignoringOtherApps: true)
-    fetchState()
-  }
-
-  func fetchState() {
-    runHS("return hs.json.encode(trisplit.panelState())") { out in
-      guard let out, let lo = out.firstIndex(of: "{"), let hi = out.lastIndex(of: "}") else { return }
-      let json = String(out[lo...hi])
-      if json == self.lastStateJSON { return }
-      self.lastStateJSON = json
-      if let attrs = try? FileManager.default.attributesOfItem(atPath: self.stateFile) {
-        self.lastStateDate = attrs[.modificationDate] as? Date
-      }
-      self.webview.evaluateJavaScript("trisplitSetState(\(json))")
+    _ = NSApplication.shared
+    let engine = Engine(env: env)
+    print(engineSmokeReport())
+    print("state: \(engine.statePath) configs=\(engine.state.configs.count) active=\(engine.state.active)")
+    print("AXIsProcessTrusted: \(AXIsProcessTrusted())")
+    print("NSScreens: \(NSScreen.screens.count)")
+    let hsV1 = hammerspoonV1Active()
+    print("hammerspoon v1 active: \(hsV1) force: \(forceHotkeys())")
+    if shouldSkipHotkeys() {
+        print("hotkeys skipped (Hammerspoon v1)")
+    } else {
+        let hk = Hotkeys()
+        if hk.installStatus != noErr { print("InstallEventHandler OSStatus \(hk.installStatus)") }
+        registerTrisplitHotkeys(hk, engine: engine) {}
+        print("hotkeys registered: \(hk.registered)/21")
+        for f in hk.failed { print("  hotkey failed: \(f)") }
     }
-  }
-
-  func forward(_ payload: String) {
-    let b64 = Data(payload.utf8).base64EncodedString()
-    runHS("trisplit.handlePanelB64('\(b64)')")
-  }
-
-  func userContentController(_ ucc: WKUserContentController, didReceive message: WKScriptMessage) {
-    guard let str = message.body as? String,
-          let data = str.data(using: .utf8),
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let action = json["action"] as? String
-    else { return }
-
-    switch action {
-    case "ready":
-      fetchState()
-    case "save":
-      saveTimer?.invalidate()
-      saveTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
-        self.forward(str)
-      }
-    case "close", "applyAndClose":
-      forward(str)
-      window.orderOut(nil)
-    default:
-      forward(str)
-    }
-  }
+    exit(0)
 }
 
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
+app.setActivationPolicy(.accessory)
 app.run()

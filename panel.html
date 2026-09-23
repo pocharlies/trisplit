@@ -21,6 +21,7 @@
     --ease: cubic-bezier(.32,.72,0,1);
     --t-1: 120ms var(--ease);
     --t-2: 200ms var(--ease);
+    --danger: #ff3b30;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -29,6 +30,7 @@
       --shadow-md: 0 4px 14px rgb(0 0 0 / .40), var(--shadow-hair);
       --shadow-pop: 0 14px 40px rgb(0 0 0 / .55), var(--shadow-hair);
       --hair: color-mix(in srgb, CanvasText 18%, transparent);
+      --danger: #ff453a;
     }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -51,7 +53,7 @@
   button.primary { background: AccentColor; color: AccentColorText; border-color: transparent; }
   button.primary:hover { background: color-mix(in srgb, AccentColor 88%, CanvasText); }
   button.icon { padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; }
-  button.danger-confirm { background: #ff3b30; color: #fff; border-color: transparent; }
+  button.danger-confirm { background: var(--danger); color: #fff; border-color: transparent; }
   kbd {
     font: var(--f-xs) ui-monospace, "SF Mono", monospace;
     background: var(--fill-thick); border: 1px solid var(--hair);
@@ -59,11 +61,14 @@
   }
   .hint { display: flex; gap: var(--sp-3); align-items: center; font-size: var(--f-xs); color: GrayText; margin-left: auto; white-space: nowrap; }
   .hint span { display: inline-flex; gap: 3px; align-items: center; }
+  @media (max-width:1000px){.hint{display:none}}
   #newname { display: none; font-size: var(--f-md); padding: var(--sp-1) var(--sp-2); border: 1px solid var(--hair); border-radius: var(--r-sm); background: Field; color: FieldText; width: 140px; }
 
   #banner { display: none; margin: 0 var(--sp-4) var(--sp-2); padding: var(--sp-1) var(--sp-3); font-size: var(--f-sm);
     background: var(--accent-soft); border: 1px solid var(--accent-mid); border-radius: var(--r-sm);
-    align-items: center; gap: var(--sp-2); }
+    flex-direction: column; gap: var(--sp-1); }
+  #banner .line { display: none; align-items: center; gap: var(--sp-2); }
+  #banner .line.warn { color: var(--danger); }
   #banner button { font-size: var(--f-xs); padding: 2px var(--sp-2); }
 
   #monitors { flex: 1; position: relative; margin: 0 var(--sp-4) var(--sp-3); padding: var(--sp-3);
@@ -77,7 +82,6 @@
   .mon.primary { outline: 2px solid var(--accent-mid); outline-offset: -1px; }
   .mon.dragging-target { outline: 2px solid color-mix(in srgb, AccentColor 45%, transparent); outline-offset: -1px; }
   .monhead { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap: nowrap; }
-  .mon.primary .monhead { cursor: default; }
   .monhead::before { content: "⠿"; color: GrayText; font-size: var(--f-sm); opacity: .6; flex-shrink: 0; }
   .monhead .idx { font: 600 var(--f-xxs)/1 ui-monospace, monospace; background: AccentColor; color: AccentColorText; border-radius: var(--r-xs); padding: 2px 4px; flex-shrink: 0; }
   .monhead .nm { font-size: var(--f-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -114,13 +118,15 @@
   body.is-dragging .chip { pointer-events: none; }
   .chip .nm { font-size: var(--f-sm); font-weight: 600; overflow-wrap: anywhere; }
   .chip .kb { font-size: var(--f-xs); font-family: ui-monospace, "SF Mono", monospace; color: GrayText; }
+  .chip:focus-visible, .tchip:focus-visible, .slot:focus-visible { outline: 2px solid AccentColor; outline-offset: 2px; }
   .chip .x {
     position: absolute; top: var(--sp-1); right: var(--sp-1); width: 20px; height: 20px;
+    padding: 0; border: 0; background: transparent; box-shadow: none; line-height: 1;
     display: grid; place-items: center; border-radius: 50%;
     color: GrayText; font-size: var(--f-xs); cursor: pointer; opacity: .55;
     transition: opacity var(--t-1), background var(--t-1), color var(--t-1);
   }
-  .chip .x:hover { opacity: 1; background: color-mix(in srgb, #ff3b30 14%, transparent); color: #ff3b30; }
+  .chip .x:hover, .chip .x:focus-visible { opacity: 1; background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 
   #tray { background: Canvas; border-top: 1px solid var(--hair); padding: var(--sp-3) var(--sp-4); max-height: 170px; overflow-y: auto; scrollbar-width: thin; }
   #tray input { width: 100%; border: 1px solid var(--hair); border-radius: var(--r-sm); padding: 5px 9px; font-size: var(--f-sm); margin-bottom: var(--sp-2); background: Field; color: FieldText; }
@@ -135,6 +141,7 @@
   .tchip::before { content: "⠿"; color: GrayText; font-size: var(--f-xxs); line-height: 1; }
   .tchip:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgb(0 0 0 / .12); }
   .tchip.placed { background: transparent; border-style: dashed; color: GrayText; }
+  #chips .empty { font-size: var(--f-xs); color: GrayText; padding: 5px 0; }
 </style>
 </head>
 <body>
@@ -147,19 +154,28 @@
         <path d="M1 3h10M4.5 3V1.5h3V3M2.5 3l.6 9.4h5.8L9.5 3M5 5.5v4.5M7 5.5v4.5"/>
       </svg>
     </button>
-    <button id="apply" class="primary">Aplicar</button>
-    <button id="applyClose">Aplicar y cerrar</button>
+    <button id="apply" class="primary" title="Aplicar configuración (⌘↩ aplica y cierra)">Aplicar</button>
+    <button id="applyClose" title="Aplicar y cerrar (⌘↩)">Aplicar y cerrar</button>
     <span class="hint">
       <span>arrastra al hueco</span>
       <span><kbd>⌘⌥</kbd><kbd>1–9</kbd> colocar</span>
       <span><kbd>⌘⌥⇧</kbd><kbd>1–9</kbd> enfocar</span>
+      <span><kbd>⌘⌥</kbd><kbd>0</kbd> aplicar</span>
+      <span><kbd>⌘⌥</kbd><kbd>P</kbd> panel</span>
       <span><kbd>esc</kbd> cerrar</span>
     </span>
   </div>
   <div id="banner">
-    <span></span>
-    <button id="applyArr" class="primary" style="display:none">Aplicar a macOS</button>
-    <button id="resetArr">Restablecer</button>
+    <div id="axLine" class="line warn">
+      <span>Trisplit necesita permiso de Accesibilidad para mover ventanas</span>
+      <button id="openAX">Abrir Ajustes…</button>
+    </div>
+    <div id="monLine" class="line"><span></span></div>
+    <div id="arrLine" class="line">
+      <span></span>
+      <button id="applyArr" class="primary" style="display:none">Aplicar a macOS</button>
+      <button id="resetArr">Restablecer</button>
+    </div>
   </div>
   <div id="monitors"></div>
   <div id="tray">
@@ -170,10 +186,13 @@
 let S = null;
 let W = null;
 
-function post(a) {
-  if (window.webkit && webkit.messageHandlers && webkit.messageHandlers.trisplit)
-    webkit.messageHandlers.trisplit.postMessage(JSON.stringify(a));
-}
+let arrDrag = null;
+let delArmed = false;
+
+// Tray/slot identity: bare "App" is the same window as "App#1".
+function specKey(a) { return /#\d+$/.test(a) ? a : a + "#1"; }
+
+function post(msg){ webkit.messageHandlers.trisplit.postMessage(JSON.stringify(msg)); }
 function screens() { return S.screens; }
 function cfg() { return S.configs[S.active - 1]; }
 function isPrimary(name) { return name === S.primary; }
@@ -239,7 +258,7 @@ function render() {
   if (!S) return;
   rebuildGroups();
   const sel = document.getElementById("cfg");
-  sel.innerHTML = "";
+  sel.replaceChildren();
   S.configs.forEach((c, i) => {
     const o = document.createElement("option");
     o.textContent = c.name; o.value = i;
@@ -247,11 +266,23 @@ function render() {
   });
   sel.value = S.active - 1;
 
+  const del = document.getElementById("del");
+  del.disabled = S.configs.length <= 1;
+  if (!delArmed) del.title = del.disabled ? "No se puede eliminar la única configuración" : "Eliminar configuración";
+
   const banner = document.getElementById("banner");
   const hasArr = Object.keys(arrange()).length > 0;
-  banner.style.display = hasArr ? "flex" : "none";
+  const noAX = S.axTrusted === false;
+  const live = new Set(screens().map(o => o.name));
+  const missing = Object.keys(cfg().monitors).filter(n => !live.has(n)).length;
+  banner.style.display = (hasArr || noAX || missing) ? "flex" : "none";
+  document.getElementById("axLine").style.display = noAX ? "flex" : "none";
+  const monLine = document.getElementById("monLine");
+  monLine.style.display = missing ? "flex" : "none";
+  monLine.querySelector("span").textContent = missing + " monitor(es) de esta configuración no están conectados — sus huecos se conservan";
+  document.getElementById("arrLine").style.display = hasArr ? "flex" : "none";
   if (hasArr) {
-    const span = banner.querySelector("span");
+    const span = document.getElementById("arrLine").querySelector("span");
     const applyBtn = document.getElementById("applyArr");
     if (S.hasDisplayplacer) {
       span.textContent = "Disposición manual pendiente — aplícala a macOS";
@@ -263,7 +294,7 @@ function render() {
   }
 
   const mon = document.getElementById("monitors");
-  mon.innerHTML = "";
+  mon.replaceChildren();
   const rects = {};
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const s of screens()) {
@@ -307,11 +338,25 @@ function render() {
     head.appendChild(nm);
     const st = document.createElement("div");
     st.className = "steppers";
-    st.innerHTML =
-      '<span class="stepper">col <button data-dc="-1">−</button><span class="v">' + m.cols + '</span><button data-dc="1">+</button></span>' +
-      '<span class="stepper">fil <button data-dr="-1">−</button><span class="v">' + m.rows + '</span><button data-dr="1">+</button></span>';
-    st.querySelectorAll("button").forEach(b => b.onclick = () =>
-      setColsRows(s.name, +b.dataset.dc || 0, +b.dataset.dr || 0));
+    for (const [label, val, dc, dr, max, noun] of [["col", m.cols, 1, 0, 6, "columna"], ["fil", m.rows, 0, 1, 4, "fila"]]) {
+      const sp = document.createElement("span");
+      sp.className = "stepper";
+      sp.append(label + " ");
+      const minus = document.createElement("button");
+      minus.textContent = "−";
+      minus.title = "Quitar " + noun; minus.setAttribute("aria-label", minus.title);
+      minus.disabled = val <= 1;
+      minus.onclick = () => setColsRows(s.name, -dc, -dr);
+      const v = document.createElement("span");
+      v.className = "v"; v.textContent = val;
+      const plus = document.createElement("button");
+      plus.textContent = "+";
+      plus.title = "Añadir " + noun; plus.setAttribute("aria-label", plus.title);
+      plus.disabled = val >= max;
+      plus.onclick = () => setColsRows(s.name, dc, dr);
+      sp.append(minus, v, plus);
+      st.appendChild(sp);
+    }
     head.appendChild(st);
     box.appendChild(head);
 
@@ -322,14 +367,34 @@ function render() {
     m.slots.forEach((app, j) => {
       const slot = document.createElement("div");
       slot.className = "slot" + (app ? " occupied" : "");
+      const label = app ? app.replace(/#(\d+)$/, " · ventana $1") : "";
+      slot.setAttribute("role", "group");
+      slot.setAttribute("aria-label", "Hueco " + (j + 1) + " de " + s.name + (app ? ": " + label : ": vacío"));
+      if (!app) slot.tabIndex = 0;
       if (app) {
         const chip = document.createElement("div");
         chip.className = "chip";
         chip.draggable = true;
+        chip.tabIndex = 0;
+        chip.setAttribute("role", "button");
+        chip.setAttribute("aria-label", label + " — Supr para quitar");
         const n = flatIndex(s.name, j + 1);
-        chip.innerHTML = '<span class="x" title="quitar">✕</span><span class="nm"></span>' + (n <= 9 ? '<span class="kb">⌘⌥' + n + "</span>" : "");
-        chip.querySelector(".nm").textContent = app.replace(/#(\d+)$/, " · v$1");
-        chip.querySelector(".x").onclick = (e) => { e.stopPropagation(); m.slots[j] = ""; persist(); };
+        const x = document.createElement("button");
+        x.className = "x"; x.title = "Quitar"; x.setAttribute("aria-label", "Quitar"); x.textContent = "✕";
+        const nmEl = document.createElement("span");
+        nmEl.className = "nm"; nmEl.textContent = label;
+        chip.append(x, nmEl);
+        if (n <= 9) {
+          const kb = document.createElement("span");
+          kb.className = "kb"; kb.textContent = "⌘⌥" + n;
+          chip.appendChild(kb);
+        }
+        x.onclick = (e) => { e.stopPropagation(); m.slots[j] = ""; persist(); };
+        chip.onkeydown = (e) => {
+          if (e.key !== "Delete" && e.key !== "Backspace") return;
+          e.preventDefault(); e.stopPropagation();
+          m.slots[j] = ""; persist();
+        };
         chip.ondragstart = (e) => {
           e.dataTransfer.setData("text/plain", JSON.stringify({ app, screen: s.name, idx: j + 1 }));
           e.dataTransfer.effectAllowed = "move";
@@ -355,6 +420,7 @@ function render() {
           post({ action: "liveMove", screen: s.name, idx: j + 1, app: p.app });
         } else {
           const src = groups().get(p.screen);
+          if (!src || !(p.idx >= 1 && p.idx <= src.slots.length)) return;
           const tmp = tgt.slots[j];
           tgt.slots[j] = src.slots[p.idx - 1];
           src.slots[p.idx - 1] = tmp;
@@ -404,7 +470,10 @@ function startArrangeDrag(e, s, box) {
     desk.appendChild(g); guides.push(g);
   }
 
-  box.onpointermove = (ev) => {
+  let moved = false, lastX = start.x, lastY = start.y;
+  const onMove = (ev) => {
+    if (ev.clientX !== sx || ev.clientY !== sy) moved = true;
+    if (!moved) return;
     let rx = start.x + (ev.clientX - sx) / sc;
     let ry = start.y + (ev.clientY - sy) / sc;
     const rect = { x: rx, y: ry, w: s.w, h: s.h };
@@ -433,7 +502,7 @@ function startArrangeDrag(e, s, box) {
       const gx = (rx - mapMinX) * sc;
       let y0 = Infinity, y1 = -Infinity;
       for (const n of neighbors) { y0 = Math.min(y0, (n.y - mapMinY) * sc); y1 = Math.max(y1, (n.y + n.h - mapMinY) * sc); }
-      guideV(gx, y0, y1 - y0);
+      guideV(gx, y0, y1);
     } else {
       rx = Math.round(rx / 16) * 16;
     }
@@ -441,7 +510,7 @@ function startArrangeDrag(e, s, box) {
       const gy = (ry - mapMinY) * sc;
       let x0 = Infinity, x1 = -Infinity;
       for (const n of neighbors) { x0 = Math.min(x0, (n.x - mapMinX) * sc); x1 = Math.max(x1, (n.x + n.w - mapMinX) * sc); }
-      guideH(gy, x0, x1 - x0);
+      guideH(gy, x0, x1);
     } else {
       ry = Math.round(ry / 16) * 16;
     }
@@ -455,21 +524,37 @@ function startArrangeDrag(e, s, box) {
     }
     box.style.left = (rx - mapMinX) * sc + "px";
     box.style.top = (ry - mapMinY) * sc + "px";
-    box.dataset.rx = rx; box.dataset.ry = ry;
+    lastX = rx; lastY = ry;
   };
-  box.onpointerup = () => {
+  const onUp = () => end(false);
+  const onCancel = () => end(true);
+  const end = (cancelled) => {
+    if (arrDrag !== end) return;
+    arrDrag = null;
+    box.removeEventListener("pointermove", onMove);
+    box.removeEventListener("pointerup", onUp);
+    box.removeEventListener("pointercancel", onCancel);
+    box.removeEventListener("lostpointercapture", onCancel);
+    try { if (box.hasPointerCapture(e.pointerId)) box.releasePointerCapture(e.pointerId); } catch {}
     clearGuides();
     ghost.remove();
+    document.querySelectorAll(".mon.dragging-target").forEach(b => b.classList.remove("dragging-target"));
     box.classList.remove("lifted");
     box.style.boxShadow = "";
     box.style.zIndex = "";
-    box.onpointermove = null; box.onpointerup = null; box.onpointercancel = box.onpointerup;
-    const rx = +box.dataset.rx, ry = +box.dataset.ry;
-    if (!S.arrange || Array.isArray(S.arrange)) S.arrange = {};
-    S.arrange[s.name] = { dx: Math.round(rx - p.x), dy: Math.round(ry - p.y) };
-    post({ action: "arrange", offsets: S.arrange });
+    if (!cancelled && moved && Number.isFinite(lastX) && Number.isFinite(lastY)) {
+      if (!S.arrange || Array.isArray(S.arrange)) S.arrange = {};
+      S.arrange[s.name] = { dx: Math.round(lastX - p.x), dy: Math.round(lastY - p.y) };
+      post({ action: "arrange", offsets: S.arrange });
+    }
     render();
   };
+  if (arrDrag) arrDrag(true);
+  arrDrag = end;
+  box.addEventListener("pointermove", onMove);
+  box.addEventListener("pointerup", onUp);
+  box.addEventListener("pointercancel", onCancel);
+  box.addEventListener("lostpointercapture", onCancel);
 }
 
 function placeInFirstFree(spec) {
@@ -487,12 +572,14 @@ function placeInFirstFree(spec) {
 }
 
 function renderChips() {
-  const q = (document.getElementById("filter").value || "").toLowerCase();
+  const qRaw = (document.getElementById("filter").value || "").trim();
+  const q = qRaw.toLowerCase();
   const used = new Set();
   for (const m of groups().values())
-    for (const a of m.slots) if (a) used.add(a.split("#")[0]);
+    for (const a of m.slots) if (a) used.add(specKey(a));
   const box = document.getElementById("chips");
-  box.innerHTML = "";
+  box.replaceChildren();
+  let shown = 0;
   for (const app of S.apps) {
     if (q && !app.name.toLowerCase().includes(q)) continue;
     const n = app.count || 1;
@@ -503,11 +590,15 @@ function renderChips() {
       let label = app.name;
       if (n > 1) {
         const t = ((app.titles && app.titles[i - 1]) || "").slice(0, 22);
-        label = app.name + " · v" + i + (t ? " — " + t : "");
+        label = app.name + " · ventana " + i + (t ? " — " + t : "");
       }
       c.textContent = label;
       c.draggable = true;
-      if (used.has(app.name)) c.classList.add("placed");
+      c.tabIndex = 0;
+      c.setAttribute("role", "button");
+      c.setAttribute("aria-label", label + " — Intro para colocar en el primer hueco libre");
+      shown++;
+      if (used.has(specKey(spec))) c.classList.add("placed");
       c.ondragstart = (e) => {
         e.dataTransfer.setData("text/plain", JSON.stringify({ app: spec, tray: true }));
         e.dataTransfer.effectAllowed = "copy";
@@ -519,8 +610,19 @@ function renderChips() {
         document.body.classList.remove("is-dragging");
       };
       c.ondblclick = () => placeInFirstFree(spec);
+      c.onkeydown = (e) => {
+        if (e.key !== "Enter" || e.metaKey) return;
+        e.preventDefault();
+        placeInFirstFree(spec);
+      };
       box.appendChild(c);
     }
+  }
+  if (!shown) {
+    const e = document.createElement("div");
+    e.className = "empty";
+    e.textContent = q ? 'Sin resultados para "' + qRaw + '"' : "No hay apps con ventanas visibles";
+    box.appendChild(e);
   }
 }
 
@@ -540,23 +642,29 @@ newName.onkeydown = (e) => {
     newName.style.display = "none";
     render();
   }
-  if (e.key === "Escape") newName.style.display = "none";};
+  if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); cancelNewName(); }
+};
+function cancelNewName() { newName.value = ""; newName.style.display = "none"; newName.blur(); }
 const delBtn = document.getElementById("del");
-let delArmed = false;
+const delIcon = [...delBtn.childNodes];
+let delTimer = null;
+function disarmDel() {
+  clearTimeout(delTimer); delTimer = null;
+  delArmed = false; delBtn.classList.remove("danger-confirm");
+  delBtn.replaceChildren(...delIcon);
+  delBtn.title = delBtn.disabled ? "No se puede eliminar la única configuración" : "Eliminar configuración";
+}
 delBtn.onclick = () => {
   if (S.configs.length <= 1) return;
   if (!delArmed) {
     delArmed = true;
     delBtn.classList.add("danger-confirm");
     delBtn.title = 'Pulsa de nuevo para eliminar "' + cfg().name + '"';
-    delBtn.innerHTML = "¿Seguro?";
-    setTimeout(() => {
-      delArmed = false; delBtn.classList.remove("danger-confirm");
-      delBtn.title = "Eliminar configuración";
-      delBtn.innerHTML = '<svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M1 3h10M4.5 3V1.5h3V3M2.5 3l.6 9.4h5.8L9.5 3M5 5.5v4.5M7 5.5v4.5"/></svg>';
-    }, 2500);
+    delBtn.textContent = "¿Seguro?";
+    delTimer = setTimeout(disarmDel, 2500);
     return;
   }
+  disarmDel();
   S.configs.splice(S.active - 1, 1);
   S.active = Math.min(S.active, S.configs.length);
   W = null;
@@ -571,9 +679,31 @@ document.getElementById("resetArr").onclick = () => {
   render();
 };
 document.getElementById("applyArr").onclick = () => post({ action: "applyArrange" });
+document.getElementById("openAX").onclick = () => post({ action: "openAXSettings" });
+
+// Global handlers are attached exactly once here; render() only sets on*
+// properties on freshly created elements, so repeated setState can't stack them.
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.metaKey) { e.preventDefault(); post({ action: "applyAndClose" }); return; }
+  if (e.key !== "Escape") return;
+  const t = document.activeElement;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) {
+    e.preventDefault();
+    if (t === newName) cancelNewName(); else t.blur();
+    return;
+  }
+  if (arrDrag) { arrDrag(true); return; }
+  e.preventDefault();
+  post({ action: "close" });
+});
 
 window.trisplitSetState = (s) => {
-  if (Array.isArray(s.arrange)) s.arrange = {};
+  if (!s || typeof s !== "object") return;
+  if (!s.arrange || Array.isArray(s.arrange)) s.arrange = {};
+  if (!Array.isArray(s.configs)) s.configs = [];
+  if (!Array.isArray(s.apps)) s.apps = [];
+  if (!Array.isArray(s.screens)) s.screens = [];
+  if (arrDrag) arrDrag(true);
   S = s; W = null; render();
 };
 document.addEventListener("DOMContentLoaded", () => post({ action: "ready" }));

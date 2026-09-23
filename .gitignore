@@ -1,4 +1,10 @@
-TrisplitPanel.app/
-*.o
+Trisplit.app/
+TrisplitPanel.app*/
+build/
+*.zip
 .DS_Store
+*.o
 /tmp/
+*.p12
+*.keychain*
+*.cer
