@@ -76,6 +76,15 @@
     eq((src.match(/postMessage/g) || []).length, 1, "postMessage occurrences in panel script");
   });
 
+  test("partial state does not throw", () => {
+    window.trisplitSetState({});
+    window.trisplitSetState({ configs: [], active: 1 });
+    window.trisplitSetState({ configs: [{ name: "Solo" }], active: 5, screens: [{ name: "X", x: 0, y: 0, w: 10, h: 10 }] });
+    eq(document.getElementById("cfg").options[0].textContent, "Solo", "renders config lacking monitors");
+    eq(document.getElementById("cfg").value, "0", "out-of-range active clamped");
+    fresh();
+  });
+
   test("renders configs", () => {
     fresh((s) => s.configs.push({ name: "Casa", monitors: {} }));
     const opts = [...document.querySelectorAll("#cfg option")].map((o) => o.textContent);

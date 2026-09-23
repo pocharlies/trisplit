@@ -58,6 +58,9 @@ func sortApps(_ apps: [PanelApp]) -> [PanelApp] {
     }.map { $0.element }
 }
 
+/// Guarded so an early push (page not loaded yet) is a no-op instead of a TypeError.
+let panelPushPrefix = "window.trisplitSetState && window.trisplitSetState("
+
 func panelPushScript(_ p: PanelState) throws -> String {
-    "window.trisplitSetState(\(try encodeJSONString(p)))"
+    "\(panelPushPrefix)\(try encodeJSONString(p)))"
 }

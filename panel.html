@@ -255,7 +255,7 @@ function setColsRows(name, dCols, dRows) {
 let mapScale = 1, mapMinX = 0, mapMinY = 0;
 
 function render() {
-  if (!S) return;
+  if (!S || !cfg()) return;
   rebuildGroups();
   const sel = document.getElementById("cfg");
   sel.replaceChildren();
@@ -701,6 +701,9 @@ window.trisplitSetState = (s) => {
   if (!s || typeof s !== "object") return;
   if (!s.arrange || Array.isArray(s.arrange)) s.arrange = {};
   if (!Array.isArray(s.configs)) s.configs = [];
+  s.configs = s.configs.filter((c) => c && typeof c === "object")
+    .map((c) => (c.monitors && typeof c.monitors === "object" ? c : { ...c, monitors: {} }));
+  if (!Number.isInteger(s.active) || s.active < 1 || s.active > s.configs.length) s.active = 1;
   if (!Array.isArray(s.apps)) s.apps = [];
   if (!Array.isArray(s.screens)) s.screens = [];
   if (arrDrag) arrDrag(true);

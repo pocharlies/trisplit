@@ -16,7 +16,7 @@ final class WeakScriptHandler: NSObject, WKScriptMessageHandler {
     }
 }
 
-final class PanelController: NSObject, WKScriptMessageHandler {
+final class PanelController: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     /// Must match `webkit.messageHandlers.<name>` in panel.html.
     static let handlerName = "trisplit"
 
@@ -26,6 +26,9 @@ final class PanelController: NSObject, WKScriptMessageHandler {
     private var saveItem: DispatchWorkItem?
     private var pendingSave: String?
     private var escMonitor: Any?
+    /// Pushes before the page defines trisplitSetState would throw; hold the latest until ready.
+    private var pageReady = false
+    private var pendingScript: String?
 
     init(engine: Engine) {
         self.engine = engine
@@ -42,6 +45,7 @@ final class PanelController: NSObject, WKScriptMessageHandler {
         cfg.userContentController.add(WeakScriptHandler(self), name: PanelController.handlerName)
         let wv = WKWebView(frame: w.contentLayoutRect, configuration: cfg)
         wv.autoresizingMask = [.width, .height]
+        wv.navigationDelegate = self
         w.contentView = wv
         if let res = Bundle.main.resourceURL {
             let html = res.appendingPathComponent("panel.html")
@@ -71,9 +75,34 @@ final class PanelController: NSObject, WKScriptMessageHandler {
     func hide() { window?.orderOut(nil) }
 
     func evaluate(_ js: String) {
+        guard pageReady else { pendingScript = js; return }
         webView?.evaluateJavaScript(js) { [weak self] _, err in
-            if let err { self?.engine.log("panel JS falló: \(err.localizedDescription)") }
+            if let err { self?.engine.log("panel JS falló: \(PanelController.describe(err))") }
         }
+    }
+
+    private func markReady() {
+        guard !pageReady else { return }
+        pageReady = true
+        if let js = pendingScript { pendingScript = nil; evaluate(js) }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { markReady() }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        engine.log("panel: proceso web terminado; recargando")
+        pageReady = false
+        webView.reload()
+    }
+
+    /// localizedDescription is generic; WKError userInfo carries the actual exception.
+    static func describe(_ err: Error) -> String {
+        let info = (err as NSError).userInfo
+        var parts = [err.localizedDescription]
+        if let m = info["WKJavaScriptExceptionMessage"] { parts.append("msg=\(m)") }
+        if let l = info["WKJavaScriptExceptionLineNumber"] { parts.append("line=\(l)") }
+        if let u = info["WKJavaScriptExceptionSourceURL"] { parts.append("src=\(u)") }
+        return parts.joined(separator: " | ")
     }
 
     /// Center on the screen that holds the mouse.
@@ -97,8 +126,10 @@ final class PanelController: NSObject, WKScriptMessageHandler {
             engine.log("panel: mensaje no JSON")
             return
         }
+        let action = JSON.parse(body)?["action"]?.string
+        if action == "ready" { markReady() }
         // Panel posts "save" on every edit; coalesce like the v1 shim did.
-        if JSON.parse(body)?["action"]?.string == "save" {
+        if action == "save" {
             pendingSave = body
             saveItem?.cancel()
             let item = DispatchWorkItem { [weak self] in self?.flushSave() }
