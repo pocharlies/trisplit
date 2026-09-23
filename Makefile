@@ -1,4 +1,4 @@
-.PHONY: build unit panel live test install cert clean
+.PHONY: build unit panel live test install cert cert-uninstall clean
 
 build:
 	./build.sh
@@ -23,6 +23,9 @@ install: build
 
 cert:
 	scripts/dev-cert.sh
+
+cert-uninstall:
+	scripts/dev-cert.sh --uninstall
 
 clean:
 	rm -rf build Trisplit.app

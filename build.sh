@@ -10,9 +10,8 @@ cd "$(dirname "$0")"
 
 APP=Trisplit.app
 BIN=Trisplit
-DEV_DIR="$HOME/Library/Application Support/trisplit-dev"
-DEV_KC="$DEV_DIR/trisplit-dev.keychain-db"
-DEV_PW="$DEV_DIR/keychain-password"
+# shellcheck source=scripts/dev-keychain.sh
+. scripts/dev-keychain.sh
 
 shopt -s nullglob
 SRCS=(app/main.swift app/Core/*.swift app/Engine/*.swift app/Shell/*.swift)
@@ -29,12 +28,17 @@ swiftc -swift-version 5 -O -target arm64-apple-macos13.0 \
     -framework ApplicationServices -framework ServiceManagement \
     "${SRCS[@]}" -o "build/$BIN"
 
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-mv "build/$BIN" "$APP/Contents/MacOS/$BIN"
-cp -X panel.html icon.png "$APP/Contents/Resources/"
+# Assemble and sign outside the repo: ~/Documents may be File Provider managed and
+# re-tags bundle dirs with FinderInfo xattrs mid-sign, which codesign rejects as
+# "detritus".
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
+S="$STAGE/$APP"
+mkdir -p "$S/Contents/MacOS" "$S/Contents/Resources"
+mv "build/$BIN" "$S/Contents/MacOS/$BIN"
+cp -X panel.html icon.png "$S/Contents/Resources/"
 
-cat >"$APP/Contents/Info.plist" <<'PLIST'
+cat >"$S/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -60,17 +64,20 @@ cat >"$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
-plutil -lint "$APP/Contents/Info.plist" >/dev/null
+plutil -lint "$S/Contents/Info.plist" >/dev/null
 
 SIGN=()
 if [ -n "${TRISPLIT_SIGN_ID:-}" ]; then
     SIGN=(-s "$TRISPLIT_SIGN_ID")
     if [ -n "${TRISPLIT_KEYCHAIN:-}" ]; then SIGN+=(--keychain "$TRISPLIT_KEYCHAIN"); fi
 elif [ -f "$DEV_KC" ] && [ -f "$DEV_PW" ]; then
+    # codesign only finds identities in searched keychains; the partition list set
+    # by dev-cert.sh lets it use the key without a GUI prompt.
+    dev_add_to_search_list || { echo "error: cannot add $DEV_KC to the keychain search list; run 'make cert'" >&2; exit 1; }
     security unlock-keychain -p "$(cat "$DEV_PW")" "$DEV_KC"
-    SHA="$(security find-identity -p codesigning "$DEV_KC" \
-        | awk 'index($0, "\"trisplit dev\"") { print $2; exit }')"
-    if [ -n "$SHA" ]; then SIGN=(--keychain "$DEV_KC" -s "$SHA"); fi
+    SHA="$(dev_identity_sha)"
+    [ -n "$SHA" ] || { echo "error: no '$DEV_NAME' identity in $DEV_KC; run 'make cert'" >&2; exit 1; }
+    SIGN=(--keychain "$DEV_KC" -s "$SHA")
 fi
 if [ ${#SIGN[@]} -eq 0 ]; then
     echo "WARNING: no signing identity; signing ad-hoc." >&2
@@ -79,10 +86,11 @@ if [ ${#SIGN[@]} -eq 0 ]; then
     SIGN=(-s -)
 fi
 
-# ~/Documents may be File Provider managed and tags files with xattrs, which
-# `codesign --verify --strict` rejects as "detritus".
-xattr -cr "$APP"
-codesign --force --options runtime --timestamp=none "${SIGN[@]}" "$APP"
-codesign --verify --deep --strict "$APP"
-codesign -dv --verbose=2 "$APP" 2>&1 | grep -E '^(Identifier|Authority|Signature)=' || true
+xattr -cr "$S"
+codesign --force --options runtime --timestamp=none "${SIGN[@]}" "$S"
+codesign --verify --deep --strict "$S"
+codesign -dv --verbose=2 "$S" 2>&1 | grep -E '^(Identifier|Authority|Signature)=' || true
+
+rm -rf "$APP"
+ditto --norsrc --noextattr "$S" "$APP"
 echo "built: $PWD/$APP"

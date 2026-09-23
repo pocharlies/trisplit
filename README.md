@@ -73,11 +73,26 @@ v1 queda en `legacy/` y en el tag `v1-hammerspoon`. Si Hammerspoon está en marc
 config v1 (`init.lua` enlazado al repo, o con `hs.hotkey.bind` + "trisplit"), v2 no registra
 sus atajos para no duplicarlos. Rollback: [docs/ROLLBACK.md](docs/ROLLBACK.md).
 
+## Firma estable (make cert)
+
+Con firma ad-hoc cada recompilación cambia la firma y macOS retira el permiso de
+Accesibilidad. Para evitarlo:
+
+1. Una sola vez: `make cert`. Crea la identidad autofirmada `trisplit dev` en un llavero
+   propio (`~/Library/Application Support/trisplit-dev/`) y lo añade a la lista de
+   búsqueda del usuario (el llavero por defecto sigue siendo `login`). Es idempotente.
+2. `make install`: sin `TRISPLIT_SIGN_ID`, firma con `trisplit dev`.
+3. Concede **Accesibilidad** una vez más (la identidad pasa de ad-hoc a certificado).
+   Las recompilaciones siguientes conservan el permiso.
+
+`TRISPLIT_SIGN_ID` (y `TRISPLIT_KEYCHAIN`) sigue teniendo prioridad; sin identidad se
+firma ad-hoc con aviso. Desinstalar: `make cert-uninstall` (quita el llavero de la lista
+de búsqueda y lo borra junto con su directorio).
+
 ## Limitaciones conocidas
 
-- Con firma ad-hoc (`TRISPLIT_SIGN_ID=-`) cada recompilación cambia la firma y macOS
-  retira el permiso de Accesibilidad: hay que volver a concederlo. `make cert` crea una
-  identidad local autofirmada (`scripts/dev-cert.sh`) para que el permiso persista.
+- Sin `make cert` (firma ad-hoc) hay que volver a conceder Accesibilidad tras cada
+  recompilación; ver [Firma estable](#firma-estable-make-cert).
 - Sólo ventanas del Space actual.
 - Reordenar monitores requiere `displayplacer` en `/opt/homebrew/bin`.
 

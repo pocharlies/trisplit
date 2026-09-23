@@ -3,31 +3,39 @@
 # keychain, so rebuilds keep the same signature and macOS keeps the Accessibility
 # grant. Idempotent: re-running only unlocks the keychain and prints the SHA-1.
 #
-# Does NOT trust the cert, touch the login keychain or change the keychain search
-# list. build.sh signs with: codesign --keychain "$KC" -s <SHA-1>.
+# The dedicated keychain is appended to the user keychain search list (codesign
+# only uses searched keychains); existing entries and their order are kept and the
+# default keychain (login) is left alone. The cert is not trusted and the login
+# keychain is not modified. build.sh signs with: codesign --keychain "$KC" -s <SHA-1>.
+#
+#   scripts/dev-cert.sh              create / unlock, print SHA-1
+#   scripts/dev-cert.sh --uninstall  drop it from the search list, delete keychain + dir
 set -euo pipefail
 
-NAME="trisplit dev"
-DIR="$HOME/Library/Application Support/trisplit-dev"
-KC="$DIR/trisplit-dev.keychain-db"
-PWFILE="$DIR/keychain-password"
+# shellcheck source=scripts/dev-keychain.sh
+. "$(dirname "$0")/dev-keychain.sh"
+NAME="$DEV_NAME"
+DIR="$DEV_DIR"
+KC="$DEV_KC"
+PWFILE="$DEV_PW"
 
-identity_sha() {
-    security find-identity -p codesigning "$KC" 2>/dev/null \
-        | awk -v n="\"$NAME\"" 'index($0, n) { print $2; exit }'
-}
-
-# Snapshot the user search list so it can be restored verbatim if
-# `security create-keychain` appends the new keychain to it.
-search_list() { security list-keychains -d user | sed -e 's/^[[:space:]]*"//' -e 's/"[[:space:]]*$//'; }
-BEFORE="$(search_list)"
-restore_search_list() {
-    if [ "$(search_list)" != "$BEFORE" ]; then
-        local kcs=()
-        while IFS= read -r l; do [ -n "$l" ] && kcs+=("$l"); done <<<"$BEFORE"
-        security list-keychains -d user -s "${kcs[@]}"
-    fi
-}
+case "${1:-}" in
+    "") ;;
+    --uninstall)
+        echo "removing $KC from the user keychain search list"
+        dev_remove_from_search_list
+        if [ -f "$KC" ]; then
+            echo "deleting keychain $KC"
+            security delete-keychain "$KC" 2>/dev/null || rm -f "$KC"
+        fi
+        if [ -d "$DIR" ]; then
+            echo "deleting $DIR"
+            rm -rf "$DIR"
+        fi
+        exit 0
+        ;;
+    *) echo "usage: $0 [--uninstall]" >&2; exit 2 ;;
+esac
 
 mkdir -p "$DIR"
 chmod 700 "$DIR"
@@ -42,13 +50,13 @@ else
     PW="$(openssl rand -base64 32 | tr -d '\n')"
     (umask 077; printf '%s' "$PW" >"$PWFILE")
     security create-keychain -p "$PW" "$KC"
-    restore_search_list
 fi
 chmod 600 "$PWFILE"
 security set-keychain-settings "$KC"          # no auto-lock timeout, no lock on sleep
 security unlock-keychain -p "$PW" "$KC"
+dev_add_to_search_list
 
-SHA="$(identity_sha)"
+SHA="$(dev_identity_sha)"
 if [ -z "$SHA" ]; then
     TMP="$(mktemp -d)"
     trap 'rm -rf "$TMP"' EXIT
@@ -79,12 +87,11 @@ EOF
     security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PW" "$KC" >/dev/null
     rm -rf "$TMP"
 
-    SHA="$(identity_sha)"
+    SHA="$(dev_identity_sha)"
     [ -n "$SHA" ] || { echo "error: identity '$NAME' not found after import" >&2; exit 1; }
     echo "created identity '$NAME' in $KC"
 else
     echo "identity '$NAME' already present in $KC"
 fi
 
-restore_search_list
-echo "$SHA"
+echo "SHA-1: $SHA"
