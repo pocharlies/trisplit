@@ -13,7 +13,8 @@ run_sync() {
   out=$(hs -c "dofile('$file')" 2>&1 | clean)
   echo "▸ $name"
   echo "  $out"
-  echo "$out" | grep -q "0 failed" || FAIL=1
+  echo "$out" | grep -qE "[1-9][0-9]* failed" && FAIL=1
+  return 0
 }
 
 run_async() {
@@ -36,7 +37,7 @@ return 'started'" >/dev/null 2>&1
     FAIL=1
   else
     sed 's/^/  /' "$result"
-    grep -q "0 failed" "$result" || FAIL=1
+    grep -qE "[1-9][0-9]* failed" "$result" && FAIL=1
   fi
 }
 

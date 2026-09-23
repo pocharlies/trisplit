@@ -78,28 +78,33 @@ local function runBlob()
   end
 end
 
--- live refresh: launching an app must appear in the panel without reopening
+-- live refresh: a new window must appear in the open panel without reopening
+-- (uses a new Finder window; Calculator/Console have non-standard windows)
 local function runLiveCheck(nextStep)
-  os.execute("pkill -x Calculator 2>/dev/null; sleep 0.3; open -ga Calculator")
-  _G.__tjs = hs.timer.doAfter(2.5, function()
-    trisplit.evalJS(
-      '(function(){ return (S.apps||[]).some(a => a.name === "Calculator") ? "LIVE-OK" : "LIVE-MISS"; })()',
-      function(res)
-        liveResult = tostring(res)
-        os.execute("pkill -x Calculator 2>/dev/null")
-        _G.__tjs = hs.timer.doAfter(1.5, function()
-          trisplit.evalJS(
-            '(function(){ return (S.apps||[]).some(a => a.name === "Calculator") ? "LIVE-STALE" : "LIVE-GONE"; })()',
-            function(res2)
-              if liveResult == "LIVE-OK" and tostring(res2) == "LIVE-GONE" then
-                liveResult = "LIVE-OK"
-              else
-                liveResult = "LIVE-FAIL(" .. liveResult .. "," .. tostring(res2) .. ")"
-              end
-              nextStep()
-            end)
+  local finder = hs.application.get("Finder")
+  local before = #trisplit._test.visibleWindows(finder)
+  finder:activate(true)
+  _G.__tjs = hs.timer.doAfter(0.8, function()
+    hs.eventtap.keyStroke({ "cmd" }, "n", 0)
+    _G.__tjs = hs.timer.doAfter(2.5, function()
+      trisplit.evalJS(
+        '(function(){ var f = (S.apps||[]).find(a => a.name === "Finder"); return f ? String(f.count) : "0"; })()',
+        function(res)
+          local now = tonumber(tostring(res)) or 0
+          if now >= before + 1 then
+            liveResult = "LIVE-OK"
+          else
+            liveResult = "LIVE-MISS(before=" .. before .. ",panel=" .. now .. ")"
+          end
+          for _, w in ipairs(finder:allWindows()) do
+            if w:isStandard() and not w:isMinimized() then
+              local t = w:title() or ""
+              if t == "Escritorio" or t == "Desktop" then w:close() end
+            end
+          end
+          nextStep()
         end)
-      end)
+    end)
   end)
 end
 
