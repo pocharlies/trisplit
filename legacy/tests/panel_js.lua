@@ -4,7 +4,7 @@
 -- Run via tests/run.sh (async; poll the result file).
 
 local T = trisplit._test
-local REPO = "/Users/dibanez/Documents/ClaudecodeTools/trisplit"
+local REPO = os.getenv("TRISPLIT_REPO") or (os.getenv("HOME") .. "/Documents/ClaudecodeTools/trisplit")
 local RESULT = "/tmp/trisplit_js_result.txt"
 local BACKUP = "/tmp/trisplit_js_backup.json"
 

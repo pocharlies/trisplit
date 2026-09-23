@@ -17,7 +17,8 @@ osascript -e 'quit app "Trisplit"' || pkill -x Trisplit
 rm ~/.hammerspoon/init.lua && mv ~/.hammerspoon/init.lua.trisplit-v1-disabled ~/.hammerspoon/init.lua
 ls -la ~/.hammerspoon/init.lua   # -> .../trisplit/legacy/init.lua
 #   b) plain copy from the tag
-git -C ~/Documents/ClaudecodeTools/trisplit show v1-hammerspoon:init.lua > ~/.hammerspoon/init.lua
+#   (ejecutar desde la raíz del repo)
+git -C "$(pwd)" show v1-hammerspoon:init.lua > ~/.hammerspoon/init.lua
 
 # 4. Relaunch Hammerspoon
 open -a Hammerspoon

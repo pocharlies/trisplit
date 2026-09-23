@@ -19,6 +19,11 @@ open ~/Applications/Trisplit.app
 
 Concede **Accesibilidad** en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad.
 
+```bash
+# make cert es opcional pero recomendado (firma estable, ver "Firma estable")
+git clone https://github.com/pocharlies/trisplit && cd trisplit && make cert && make install
+```
+
 ## Atajos
 
 | Atajo | Acción |
