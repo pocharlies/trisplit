@@ -306,5 +306,27 @@
     assert(document.getElementById("apply").title.includes("⌘↩"), "apply title mentions ⌘↩");
   });
 
+  test("absent chips: closed apps greyed, open ones not", () => {
+    fresh((s) => {
+      s.configs[0].monitors["Built-in Retina Display"].slots = ["Mail"];
+      s.apps.push({ name: "Visual Studio Code", count: 1, titles: [""] });
+      s.apps = s.apps.filter((a) => a.name !== "Code");
+      s.configs[0].monitors[ODY].slots = ["Safari", "Code"];
+    });
+    const chipAt = (n, i) => slotOf(n, i).querySelector(".chip");
+    const absent = chipAt("Built-in Retina Display", 1);
+    assert(absent.classList.contains("absent"), "Mail (closed) marked absent");
+    eq(absent.title, "No está abierta", "absent tooltip");
+    const safari = chipAt(ODY, 1);
+    assert(!safari.classList.contains("absent"), "Safari (open) not absent");
+    eq(safari.title, "", "present chip has no absent tooltip");
+    assert(!chipAt("LC49G95T", 3).classList.contains("absent"), "U+200E WhatsApp matches");
+    assert(!chipAt(ODY, 2).classList.contains("absent"), "alias Code -> Visual Studio Code");
+    fresh();
+    assert(!chipAt("LC49G95T", 1).classList.contains("absent"), "Code#2 suffix matches Code");
+    fresh((s) => { s.apps = s.apps.filter((a) => a.name !== "Code"); });
+    assert(chipAt("LC49G95T", 1).classList.contains("absent"), "Code#2 absent when Code closed");
+  });
+
   report("panel: " + pass + " passed, " + fail + " failed");
 })();

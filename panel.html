@@ -116,6 +116,7 @@
   .chip:active { cursor: grabbing; }
   .chip.dragging, .tchip.dragging { opacity: .3; }
   body.is-dragging .chip { pointer-events: none; }
+  .chip.absent { background: transparent; border-style: dashed; color: GrayText; box-shadow: none; }
   .chip .nm { font-size: var(--f-sm); font-weight: 600; overflow-wrap: anywhere; }
   .chip .kb { font-size: var(--f-xs); font-family: ui-monospace, "SF Mono", monospace; color: GrayText; }
   .chip:focus-visible, .tchip:focus-visible, .slot:focus-visible { outline: 2px solid AccentColor; outline-offset: 2px; }
@@ -191,6 +192,18 @@ let delArmed = false;
 
 // Tray/slot identity: bare "App" is the same window as "App#1".
 function specKey(a) { return /#\d+$/.test(a) ? a : a + "#1"; }
+
+// Slot spec -> comparable app name: drops "#n", Unicode format chars (U+200E…), case.
+const ALIASES = { "Code": "Visual Studio Code", "Visual Studio Code": "Code" };
+function normApp(n) { return (n || "").replace(/\p{Cf}/gu, "").trim().toLowerCase(); }
+function specApp(spec) { return spec.replace(/#\d+$/, ""); }
+// Apply never launches apps: a slot whose app is not open is skipped.
+function appPresent(spec) {
+  const name = specApp(spec);
+  const want = new Set([normApp(name), normApp(ALIASES[name])]);
+  want.delete("");
+  return (S.apps || []).some((a) => want.has(normApp(a.name)));
+}
 
 function post(msg){ webkit.messageHandlers.trisplit.postMessage(JSON.stringify(msg)); }
 function screens() { return S.screens; }
@@ -374,6 +387,7 @@ function render() {
       if (app) {
         const chip = document.createElement("div");
         chip.className = "chip";
+        if (!appPresent(app)) { chip.classList.add("absent"); chip.title = "No está abierta"; }
         chip.draggable = true;
         chip.tabIndex = 0;
         chip.setAttribute("role", "button");

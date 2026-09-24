@@ -98,13 +98,13 @@ final class Engine: @unchecked Sendable {
 
     // MARK: - Placement (AX queue)
 
-    /// Lua placeApp(). Blocking; AX queue only.
+    /// Lua placeApp(). Blocking; AX queue only. Closed apps are skipped, never launched.
     private func placeApp(_ spec: String, _ frame: Rect) -> Bool {
         let (name, idx) = parseSpec(spec)
         let names = namesFor(name)
-        guard let app = ensureRunning(names) else {
-            axLog("app no encontrada: \(name)")
-            return false
+        guard let app = runningApp(names) else {
+            axLog("no abierta, omitida: \(name)")
+            return true
         }
         var pid = app.processIdentifier
         var win = pickWindow(visibleWindows(pid: pid), idx: idx)
